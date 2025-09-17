@@ -24,15 +24,148 @@ df-print: kable
 library(dplyr)
 library(ggplot2)
 library(here)
+library(MCMCvis)
+library(nimble)
 ```
 
 ## Data
 
 ```{r}
-data <- read.csv(here("Data/input.csv"))
+raw_data <- read.csv(here("Data/input.csv"))
+```
+
+```{r}
+y <- raw_data |>
+    select(x97:x04)
+
+# time_span <- ncol(y)
+
+first <- apply(y, 1, function(x) min(which(x != 0)))
+n_obs <- sum(apply(y, 1, sum) != 0)
+
+for (i in 1:n_obs) { # Not useful i think
+  if (first[i] > 1) y[i, 1:(first[i] - 1)] <- NA
+}
+```
+
+```{r}
+data <- list(y = y + 1)
+```
+
+```{r}
+zinits <- function(y) {
+  T <- length(y)
+  first <- min(which(y != 0))
+  last <- max(which(y == 1))
+  z <- rep(NA, T)
+  if (last == T) {
+    z[first:T] <- 1
+  } else {
+    if (last == (T - 1)) {
+      z[first:(T - 1)] <- 1
+      z[T] <- sample(1:2, size = 1)
+    } else {
+      death <- sample((last + 1):T, size = 1)
+      z[first:(death - 1)] <- 1
+      z[death:T] <- 2
+    }
+  }
+  return(z)
+}
+```
+
+Global model parameters :
+
+```{r}
+n_iter <- 5000
+n_burnin <- 2000
+n_chains <- 2
+n_thin <- 1
 ```
 
 # 1. Preliminary analyses
+
+Selecting a model where survival probabliity and detection probability depend on time and sex. We will compare WAIC values to select the best model.
+
+From the modt complex model to the most simple.
+
+## Model 1 : $p$ and $\phi$ depend on time and sex as categorical variables
+
+```{r}
+model_1 <- nimbleCode({
+  for (sx in 1:N) {
+    for (yr in 1:T) {
+      phi[sx, yr] ~ dunif(0, 1)
+      p[sx, yr] ~ dunif(0, 1)
+    }
+  }
+
+  for (i in 1:N) {
+    for (j in 1:T) {
+      gamma[1, 1, i, j] <- phi[sex[i], j]
+      gamma[1, 2, i, j] <- 1 - phi[sex[i], j]
+      gamma[2, 1, i, j] <- 0
+      gamma[2, 2, i, j] <- 1
+
+      omega[1, 1, i, j] <- 1 - p[sex[i], j]
+      omega[1, 2, i, j] <- p[sex[i], j]
+      omega[2, 1, i, j] <- 1
+      omega[2, 2, i, j] <- 0
+    }
+  }
+
+  delta[1] <- 1
+  delta[2] <- 0
+
+  for (i in 1:N) {
+    z[i, first[i]] ~ dcat(delta[1:2])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i, j - 1])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i, j - 1])
+    }
+  }
+})
+```
+
+```{r}
+constants <- list(N = nrow(y), T = ncol(y), sex = raw_data$sex, first = first)
+```
+
+```{r}
+initial_values1 <- list(
+  z = t(apply(y, 1, zinits))
+)
+
+initial_values2 <- list(
+  z = t(apply(y, 1, zinits))
+)
+
+initial_values <- c(initial_values1, initial_values2)
+```
+
+```{r}
+monitor <- c("phi", "p")
+```
+
+```{r}
+mcmc_1 <- nimbleMCMC(
+  code = model_1,
+  constants = constants,
+  data = data,
+  inits = initial_values,
+  monitors = monitor,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  thin = n_thin,
+  WAIC = TRUE,
+  summary = TRUE
+)
+```
+
+```{r}
+mcmc_1$summary
+```
 
 # 2. Effect of oxychlordane (OXY)
 

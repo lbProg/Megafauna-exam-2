@@ -35,6 +35,10 @@ raw_data <- read.csv(here("Data/input.csv"))
 ```
 
 ```{r}
+set.seed(1604)
+```
+
+```{r}
 y <- raw_data |>
     select(x97:x04)
 
@@ -93,15 +97,11 @@ From the modt complex model to the most simple.
 
 ```{r}
 model_1 <- nimbleCode({
-  for (sx in 1:N) {
-    for (yr in 1:T) {
-      phi[sx, yr] ~ dunif(0, 1)
-      p[sx, yr] ~ dunif(0, 1)
-    }
-  }
-
   for (i in 1:N) {
     for (j in 1:T) {
+      phi[i, j] ~ dunif(0, 1)
+      p[i, j] ~ dunif(0, 1)
+
       gamma[1, 1, i, j] <- phi[sex[i], j]
       gamma[1, 2, i, j] <- 1 - phi[sex[i], j]
       gamma[2, 1, i, j] <- 0
@@ -164,7 +164,7 @@ mcmc_1 <- nimbleMCMC(
 ```
 
 ```{r}
-mcmc_1$summary
+mcmc_1$WAIC
 ```
 
 # 2. Effect of oxychlordane (OXY)

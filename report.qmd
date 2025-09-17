@@ -1,6 +1,8 @@
 ---
 title: "Capture-Mark-Recapture models of _Larus hyperboreus_"
-author: Lucien Bastin
+author: 
+    - Lucien Bastin
+    - Lucie Fournil
 date: 2025-09-17
 format: html
 knitr:
@@ -14,11 +16,23 @@ toc-location: right-body
 df-print: kable
 ---
 
-# Libraries
+# Setup
+
+## Libraries
 
 ```{r}
 library(dplyr)
 library(ggplot2)
 library(here)
 ```
+
+## Data
+
+```{r}
+data <- read.csv(here("Data/input.csv"))
+```
+
+# 1. Preliminary analyses
+
+# 2. Effect of oxychlordane (OXY)
 

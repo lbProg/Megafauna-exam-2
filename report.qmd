@@ -83,7 +83,7 @@ Global model parameters :
 ```{r}
 n_iter <- 200
 n_burnin <- 100
-n_chains <- 2
+n_chains <- 4
 n_thin <- 1
 ```
 
@@ -93,78 +93,102 @@ Selecting a model where survival probabliity and detection probability depend on
 
 From the modt complex model to the most simple.
 
-## Model 1 : $p$ and $\phi$ depend on time and sex as categorical variables
+## Model 1
 
 ```{r}
-model_1 <- nimbleCode({
+SEX <- as.integer(raw_data$sex)
+K <- max(SEX)
+```
+
+```{r}
+model <- nimbleCode({
+  delta[1] <- 1
+  delta[2] <- 0
+
+  alpha_sex_phi[1] <- 0
+  for (k in 2:K) {
+    alpha_sex_phi[k] ~ dnorm(0, sd = 1.5)
+  }
+  for (t in 1:(T - 1)) {
+    eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
+  }
+
   for (i in 1:N) {
-    for (j in 1:T) {
-      phi[i, j] ~ dunif(0, 1)
-      p[i, j] ~ dunif(0, 1)
-
-      gamma[1, 1, i, j] <- phi[sex[i], j]
-      gamma[1, 2, i, j] <- 1 - phi[sex[i], j]
-      gamma[2, 1, i, j] <- 0
-      gamma[2, 2, i, j] <- 1
-
-      omega[1, 1, i, j] <- 1 - p[sex[i], j]
-      omega[1, 2, i, j] <- p[sex[i], j]
-      omega[2, 1, i, j] <- 1
-      omega[2, 2, i, j] <- 0
+    for (t in 1:(T - 1)) {
+      logit(phi[i, t]) <- muphi + alpha_sex_phi[SEX[i]] + eps_phi[t]
+      gamma[1, 1, i, t] <- phi[i, t]
+      gamma[1, 2, i, t] <- 1 - phi[i, t]
+      gamma[2, 1, i, t] <- 0
+      gamma[2, 2, i, t] <- 1
     }
   }
 
-  delta[1] <- 1
-  delta[2] <- 0
+  for (k in 1:K) {
+    p[k] ~ dunif(0, 1)
+  }
+
+  for (i in 1:N) {
+    omega[1, 1, i] <- 1 - p[SEX[i]]
+    omega[1, 2, i] <- p[SEX[i]]
+    omega[2, 1, i] <- 1
+    omega[2, 2, i] <- 0
+  }
 
   for (i in 1:N) {
     z[i, first[i]] ~ dcat(delta[1:2])
     for (j in (first[i] + 1):T) {
       z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i, j - 1])
-      y[i, j] ~ dcat(omega[z[i, j], 1:2, i, j - 1])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
     }
   }
 })
 ```
 
 ```{r}
-constants <- list(N = nrow(y), T = ncol(y), sex = raw_data$sex, first = first)
+constants <- list(N = nrow(y), T = ncol(y), first = first, SEX = SEX, K = K)
 ```
 
 ```{r}
-initial_values1 <- list(
-  z = t(apply(y, 1, zinits))
-)
+get_init_vals <- function() {
+  list(
+    p = runif(K, 0, 1),
+    muphi = rnorm(1, 0, 1),
+    sdeps_phi = runif(1, 0, 3),
+    alpha_sex_phi = c(0, runif(1, 0, 3)),
+    z = t(apply(y, 1, zinits))
+  )
+}
 
-initial_values2 <- list(
-  z = t(apply(y, 1, zinits))
-)
-
-initial_values <- c(initial_values1, initial_values2)
+initial_values <- rep(get_init_vals(), 4)
 ```
 
 ```{r}
-monitor <- c("phi", "p")
+params <- c("p", "muphi", "alpha_sex_phi", "sdeps_phi")
 ```
 
 ```{r}
-mcmc_1 <- nimbleMCMC(
-  code = model_1,
+mcmc <- nimbleMCMC(
+  code = model,
   constants = constants,
   data = data,
   inits = initial_values,
-  monitors = monitor,
+  monitors = params,
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
-  thin = n_thin,
-  WAIC = TRUE,
-  summary = TRUE
+  setSeed = c(1, 2, 3, 4),
+  summary = TRUE,
+  WAIC = TRUE
 )
 ```
 
 ```{r}
-mcmc_1$WAIC
+mcmc$WAIC
+mcmc$summary
+```
+
+```{r}
+MCMCsummary(mcmc$samples, params = "p")
 ```
 
 # 2. Effect of oxychlordane (OXY)

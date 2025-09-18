@@ -81,8 +81,8 @@ zinits <- function(y) {
 Global model parameters :
 
 ```{r}
-n_iter <- 5000
-n_burnin <- 2000
+n_iter <- 200
+n_burnin <- 100
 n_chains <- 2
 n_thin <- 1
 ```
@@ -169,3 +169,137 @@ mcmc_1$WAIC
 
 # 2. Effect of oxychlordane (OXY)
 
+## Encode oxy
+
+log(OXY) as a continuous variable (OXY) :
+
+```{r}
+log_oxy <- log(raw_data$oxy)
+```
+
+log(OXY) as a categorical variable (OXYD) :
+
+```{r}
+quantiles <- quantile(log_oxy, probs = seq(0, 1, by = 0.1))
+
+oxyd <- log_oxy |>
+  cut(
+    breaks = quantiles,
+    labels = paste0(rep(seq(1, 10, 1)), rep("D", 10)),
+    include.lowest = TRUE
+  )
+```
+
+Pool all deciles except the last n :
+
+```{r}
+pool_n <- function(data, sex, n_female, n_male) {
+  levels_d <- sort(unique(data))
+
+  unique_d_female <- tail(levels_d, n_female)
+  unique_d_male <- tail(levels_d, n_male)
+
+  data <- as.character(data)
+
+  # 1 is male and 2 is female
+  data[sex == 2 & !(data %in% unique_d_female)] <- "group_D"
+  data[sex == 1 & !(data %in% unique_d_male)] <- "group_D"
+
+  data
+}
+```
+
+```{r}
+data.frame(x = oxyd, sex = raw_data$sex, y = pool_n(oxyd, raw_data$sex, 2, 3))
+```
+
+## Model selection strategy
+
+| Model | log(OXY)    | male threshold | female threshold | WAIC |
+|-------|-------------|----------------|------------------|------|
+| 1     | continuous  | na             | na               |      |
+| 2     | categorical | 0              | 0                |      |
+| 3     | categorical | 2              | 2                |      |
+| 4     | categorical | 3              | 3                |      |
+| 5     | categorical | 2              | 3                |      |
+
+## Running the models : phi depends on OXY
+
+### log(OXY) as a continuous variable
+
+Scale log(OXY)
+
+```{r}
+log_oxy_sc <- as.vector(scale(log_oxy))
+```
+
+```{r}
+model_oxy_cont <- nimbleCode({
+  p ~ dunif(0, 1)
+
+  omega[1, 1] <- 1 - p
+  omega[1, 2] <- p
+  omega[2, 1] <- 1
+  omega[2, 2] <- 0
+
+  for (i in 1:N) {
+    logit(phi[i]) <- beta[1] + beta[2] * oxy[i]
+    gamma[1, 1, i] <- phi[i]
+    gamma[1, 2, i] <- 1 - phi[i]
+    gamma[2, 1, i] <- 0
+    gamma[2, 2, i] <- 1
+  }
+
+  beta[1] ~ dnorm(mean = 0, sd = 1.5)
+  beta[2] ~ dnorm(mean = 0, sd = 1.5)
+
+  delta[1] <- 1
+  delta[2] <- 0
+
+  for (i in 1:N) {
+    z[i, first[i]] ~ dcat(delta[1:2])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2])
+    }
+  }
+})
+```
+
+```{r}
+constants <- list(
+  N = nrow(y),
+  T = ncol(y),
+  first = first,
+  oxy = log_oxy_sc
+)
+```
+
+```{r}
+initial_values <- function() {
+  list(
+    beta = rnorm(2, 0, 1),
+    p = runif(1, 0, 1),
+    z = t(apply(y, 1, zinits))
+  )
+}
+```
+
+```{r}
+monitor = c("p", "phi", "beta")
+```
+
+```{r}
+mcmc_1 <- nimbleMCMC(
+  code = model_oxy_cont,
+  constants = constants,
+  data = data,
+  inits = initial_values,
+  monitors = monitor,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  summary = TRUE,
+  WAIC = TRUE
+)
+```

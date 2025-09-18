@@ -34,26 +34,32 @@ library(nimble)
 raw_data <- read.csv(here("Data/input.csv"))
 ```
 
+For reproducibility, we set the global seed and the seeds for each of the chains in our models.
+
 ```{r}
 set.seed(1604)
+chain_seed <- c(1, 2, 3, 4)
 ```
+
+Fetching the CMR data :
 
 ```{r}
 y <- raw_data |>
     select(x97:x04)
 
-# time_span <- ncol(y)
-
 first <- apply(y, 1, function(x) min(which(x != 0)))
 n_obs <- sum(apply(y, 1, sum) != 0)
 
-for (i in 1:n_obs) { # Not useful i think
+for (i in 1:n_obs) {
   if (first[i] > 1) y[i, 1:(first[i] - 1)] <- NA
 }
 ```
 
+Converting CMR data from 0-1 to 1-2 and storing sex in a vector :
+
 ```{r}
 data <- list(y = y + 1)
+sex <- as.integer(raw_data$sex)
 ```
 
 ```{r}
@@ -78,7 +84,7 @@ zinits <- function(y) {
 }
 ```
 
-Global model parameters :
+Global MCMC parameters :
 
 ```{r}
 n_iter <- 200
@@ -95,10 +101,12 @@ From the modt complex model to the most simple.
 
 ## Model 1
 
-```{r}
-SEX <- as.integer(raw_data$sex)
-K <- max(SEX)
-```
+|      | $p$         | $\phi$      |
+|------|-------------|-------------|
+| Time | constant    | RE          |
+| Sex  | categorical | categorical |
+
+Model code :
 
 ```{r}
 model <- nimbleCode({
@@ -115,7 +123,7 @@ model <- nimbleCode({
 
   for (i in 1:N) {
     for (t in 1:(T - 1)) {
-      logit(phi[i, t]) <- muphi + alpha_sex_phi[SEX[i]] + eps_phi[t]
+      logit(phi[i, t]) <- muphi + alpha_sex_phi[sex[i]] + eps_phi[t]
       gamma[1, 1, i, t] <- phi[i, t]
       gamma[1, 2, i, t] <- 1 - phi[i, t]
       gamma[2, 1, i, t] <- 0
@@ -123,13 +131,13 @@ model <- nimbleCode({
     }
   }
 
-  for (k in 1:K) {
+  for (k in 1:k) {
     p[k] ~ dunif(0, 1)
   }
 
   for (i in 1:N) {
-    omega[1, 1, i] <- 1 - p[SEX[i]]
-    omega[1, 2, i] <- p[SEX[i]]
+    omega[1, 1, i] <- 1 - p[sex[i]]
+    omega[1, 2, i] <- p[sex[i]]
     omega[2, 1, i] <- 1
     omega[2, 2, i] <- 0
   }
@@ -144,9 +152,19 @@ model <- nimbleCode({
 })
 ```
 
+Setting the constants :
+
 ```{r}
-constants <- list(N = nrow(y), T = ncol(y), first = first, SEX = SEX, K = K)
+constants <- list(
+  N = nrow(y),
+  T = ncol(y),
+  first = first,
+  sex = sex,
+  k = max(sex)
+)
 ```
+
+Initial values of the four Markov Chains :
 
 ```{r}
 get_init_vals <- function() {
@@ -162,9 +180,13 @@ get_init_vals <- function() {
 initial_values <- rep(get_init_vals(), 4)
 ```
 
+Parameters to monitor :
+
 ```{r}
 params <- c("p", "muphi", "alpha_sex_phi", "sdeps_phi")
 ```
+
+Running the MCMC :
 
 ```{r}
 mcmc <- nimbleMCMC(
@@ -176,7 +198,7 @@ mcmc <- nimbleMCMC(
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
-  setSeed = c(1, 2, 3, 4),
+  setSeed = chain_seed,
   summary = TRUE,
   WAIC = TRUE
 )
@@ -195,13 +217,13 @@ MCMCsummary(mcmc$samples, params = "p")
 
 ## Encode oxy
 
-log(OXY) as a continuous variable (OXY) :
+Encoding $log(OXY)$ as a continuous variable (OXY) :
 
 ```{r}
 log_oxy <- log(raw_data$oxy)
 ```
 
-log(OXY) as a categorical variable (OXYD) :
+Encoding $log(OXY)$ as a categorical variable (OXYD) :
 
 ```{r}
 quantiles <- quantile(log_oxy, probs = seq(0, 1, by = 0.1))
@@ -239,6 +261,8 @@ data.frame(x = oxyd, sex = raw_data$sex, y = pool_n(oxyd, raw_data$sex, 2, 3))
 
 ## Model selection strategy
 
+We will test the folowing models to compare them :
+
 | Model | log(OXY)    | male threshold | female threshold | WAIC |
 |-------|-------------|----------------|------------------|------|
 | 1     | continuous  | na             | na               |      |
@@ -251,7 +275,7 @@ data.frame(x = oxyd, sex = raw_data$sex, y = pool_n(oxyd, raw_data$sex, 2, 3))
 
 ### log(OXY) as a continuous variable
 
-Scale log(OXY)
+Scale $log(OXY)$
 
 ```{r}
 log_oxy_sc <- as.vector(scale(log_oxy))
@@ -259,32 +283,45 @@ log_oxy_sc <- as.vector(scale(log_oxy))
 
 ```{r}
 model_oxy_cont <- nimbleCode({
-  p ~ dunif(0, 1)
-
-  omega[1, 1] <- 1 - p
-  omega[1, 2] <- p
-  omega[2, 1] <- 1
-  omega[2, 2] <- 0
-
-  for (i in 1:N) {
-    logit(phi[i]) <- beta[1] + beta[2] * oxy[i]
-    gamma[1, 1, i] <- phi[i]
-    gamma[1, 2, i] <- 1 - phi[i]
-    gamma[2, 1, i] <- 0
-    gamma[2, 2, i] <- 1
-  }
-
-  beta[1] ~ dnorm(mean = 0, sd = 1.5)
-  beta[2] ~ dnorm(mean = 0, sd = 1.5)
-
   delta[1] <- 1
   delta[2] <- 0
+
+  for (t in 1:(T - 1)) {
+    eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
+  }
+
+  for (i in 1:N) {
+    for (t in 1:(T - 1)) {
+      logit(phi[i, t]) <- muphi + eps_phi[t] + beta * oxy[i]
+
+      gamma[1, 1, i, t] <- phi[i, t]
+      gamma[1, 2, i, t] <- 1 - phi[i, t]
+      gamma[2, 1, i, t] <- 0
+      gamma[2, 2, i, t] <- 1
+    }
+  }
+
+  for (k in 1:K) {
+    p[k] ~ dunif(0, 1)
+  }
+
+  for (i in 1:N) {
+    omega[1, 1, i] <- 1 - p[sex[i]]
+    omega[1, 2, i] <- p[sex[i]]
+    omega[2, 1, i] <- 1
+    omega[2, 2, i] <- 0
+  }
+
+  muphi ~ dnorm(0, sd = 1.5)
+  sdeps_phi ~ dunif(0, 10)
+
+  beta ~ dnorm(0, sd = 1.5)
 
   for (i in 1:N) {
     z[i, first[i]] ~ dcat(delta[1:2])
     for (j in (first[i] + 1):T) {
-      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i])
-      y[i, j] ~ dcat(omega[z[i, j], 1:2])
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i, j - 1])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
     }
   }
 })
@@ -294,6 +331,8 @@ model_oxy_cont <- nimbleCode({
 constants <- list(
   N = nrow(y),
   T = ncol(y),
+  sex = sex,
+  K = max(sex),
   first = first,
   oxy = log_oxy_sc
 )
@@ -302,8 +341,8 @@ constants <- list(
 ```{r}
 initial_values <- function() {
   list(
-    beta = rnorm(2, 0, 1),
-    p = runif(1, 0, 1),
+    beta = rnorm(1, 0, 1),
+    p = runif(2, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -326,4 +365,9 @@ mcmc_1 <- nimbleMCMC(
   summary = TRUE,
   WAIC = TRUE
 )
+```
+
+```{r}
+MCMCsummary(mcmc_1$samples, params = "beta")
+mcmc_1$WAIC
 ```

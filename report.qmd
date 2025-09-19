@@ -1,7 +1,7 @@
 ---
 title: "Capture-Mark-Recapture models of _Larus hyperboreus_"
 author: 
-    - Lucien Bastin
+    - Lucien Bastin COUCOU
     - Lucie Fournil
 date: 2025-09-17
 format: html

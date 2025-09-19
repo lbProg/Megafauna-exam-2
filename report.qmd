@@ -273,7 +273,7 @@ We will test the folowing models to compare them :
 
 ## Running the models : phi depends on OXY
 
-### log(OXY) as a continuous variable
+### $log(OXY)$ as a continuous variable
 
 Scale $log(OXY)$
 
@@ -362,6 +362,7 @@ mcmc_1 <- nimbleMCMC(
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
+  setSeed = chain_seed,
   summary = TRUE,
   WAIC = TRUE
 )
@@ -459,6 +460,7 @@ mcmc_2 <- nimbleMCMC(
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
+  setSeed = chain_seed,
   summary = TRUE,
   WAIC = TRUE
 )
@@ -506,6 +508,7 @@ mcmc_3 <- nimbleMCMC(
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
+  setSeed = chain_seed,
   summary = TRUE,
   WAIC = TRUE
 )
@@ -553,6 +556,7 @@ mcmc_4 <- nimbleMCMC(
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
+  setSeed = chain_seed,
   summary = TRUE,
   WAIC = TRUE
 )
@@ -600,6 +604,7 @@ mcmc_5 <- nimbleMCMC(
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
+  setSeed = chain_seed,
   summary = TRUE,
   WAIC = TRUE
 )

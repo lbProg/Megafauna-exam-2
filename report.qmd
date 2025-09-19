@@ -231,9 +231,10 @@ quantiles <- quantile(log_oxy, probs = seq(0, 1, by = 0.1))
 oxyd <- log_oxy |>
   cut(
     breaks = quantiles,
-    labels = paste0(rep(seq(1, 10, 1)), rep("D", 10)),
+    labels = seq(1, 10, 1),
     include.lowest = TRUE
-  )
+  ) |>
+  as.numeric()
 ```
 
 Pool all deciles except the last n :
@@ -245,13 +246,11 @@ pool_n <- function(data, sex, n_female, n_male) {
   unique_d_female <- tail(levels_d, n_female)
   unique_d_male <- tail(levels_d, n_male)
 
-  data <- as.character(data)
-
   # 1 is male and 2 is female
-  data[sex == 2 & !(data %in% unique_d_female)] <- "group_D"
-  data[sex == 1 & !(data %in% unique_d_male)] <- "group_D"
+  data[sex == 2 & !(data %in% unique_d_female)] <- 1
+  data[sex == 1 & !(data %in% unique_d_male)] <- 1
 
-  data
+  as.numeric(data)
 }
 ```
 
@@ -268,8 +267,8 @@ We will test the folowing models to compare them :
 | 1     | continuous  | na             | na               |      |
 | 2     | categorical | 0              | 0                |      |
 | 3     | categorical | 2              | 2                |      |
-| 4     | categorical | 3              | 3                |      |
-| 5     | categorical | 2              | 3                |      |
+| 5     | categorical | 3              | 3                |      |
+| 6     | categorical | 2              | 3                |      |
 
 ## Running the models : phi depends on OXY
 
@@ -370,4 +369,202 @@ mcmc_1 <- nimbleMCMC(
 ```{r}
 MCMCsummary(mcmc_1$samples, params = "beta")
 mcmc_1$WAIC
+```
+
+## $log(OXY)$ as a categorical variable
+
+```{r}
+model_oxy_cat <- nimbleCode({
+  delta[1] <- 1
+  delta[2] <- 0
+
+  for (t in 1:(T - 1)) {
+    eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
+  }
+
+  for (i in 1:length(unique(oxyd))) {
+    beta[i] ~ dnorm(0, 1.5)
+  }
+
+  for (i in 1:N) {
+    for (t in 1:(T - 1)) {
+      logit(phi[i, t]) <- muphi +
+        eps_phi[t] +
+        beta[oxyd[i]]
+
+      gamma[1, 1, i, t] <- phi[i, t]
+      gamma[1, 2, i, t] <- 1 - phi[i, t]
+      gamma[2, 1, i, t] <- 0
+      gamma[2, 2, i, t] <- 1
+    }
+  }
+
+  for (k in 1:K) {
+    p[k] ~ dunif(0, 1)
+  }
+
+  for (i in 1:N) {
+    omega[1, 1, i] <- 1 - p[sex[i]]
+    omega[1, 2, i] <- p[sex[i]]
+    omega[2, 1, i] <- 1
+    omega[2, 2, i] <- 0
+  }
+
+  muphi ~ dnorm(0, sd = 1.5)
+  sdeps_phi ~ dunif(0, 10)
+
+  for (i in 1:N) {
+    z[i, first[i]] ~ dcat(delta[1:2])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i, j - 1])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
+    }
+  }
+})
+```
+
+```{r}
+constants <- list(
+  N = nrow(y),
+  T = ncol(y),
+  sex = sex,
+  K = max(sex),
+  first = first,
+  oxyd = oxyd
+)
+```
+
+```{r}
+initial_values <- function() {
+  list(
+    beta = rnorm(length(unique(oxyd)), 0, 1),
+    p = runif(2, 0, 1),
+    z = t(apply(y, 1, zinits))
+  )
+}
+```
+
+```{r}
+monitor = c("p", "phi", "beta")
+```
+
+```{r}
+mcmc_2 <- nimbleMCMC(
+  code = model_oxy_cat,
+  constants = constants,
+  data = data,
+  inits = initial_values,
+  monitors = monitor,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  summary = TRUE,
+  WAIC = TRUE
+)
+```
+
+```{r}
+MCMCsummary(mcmc_2$samples, params = "beta")
+mcmc_2$WAIC
+```
+
+## $log(OXY)$ as a categorical variable with pooling except last two deciles
+
+```{r}
+oxyd_2D <- pool_n(oxyd, raw_data$sex, 2, 2)
+```
+
+```{r}
+model_oxy_cat <- nimbleCode({
+  delta[1] <- 1
+  delta[2] <- 0
+
+  for (t in 1:(T - 1)) {
+    eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
+  }
+
+  for (i in 1:length(unique(oxyd))) {
+    beta[i] ~ dnorm(0, 1.5)
+  }
+
+  for (i in 1:N) {
+    for (t in 1:(T - 1)) {
+      logit(phi[i, t]) <- muphi +
+        eps_phi[t] +
+        beta[oxyd[i]]
+
+      gamma[1, 1, i, t] <- phi[i, t]
+      gamma[1, 2, i, t] <- 1 - phi[i, t]
+      gamma[2, 1, i, t] <- 0
+      gamma[2, 2, i, t] <- 1
+    }
+  }
+
+  for (k in 1:K) {
+    p[k] ~ dunif(0, 1)
+  }
+
+  for (i in 1:N) {
+    omega[1, 1, i] <- 1 - p[sex[i]]
+    omega[1, 2, i] <- p[sex[i]]
+    omega[2, 1, i] <- 1
+    omega[2, 2, i] <- 0
+  }
+
+  muphi ~ dnorm(0, sd = 1.5)
+  sdeps_phi ~ dunif(0, 10)
+
+  for (i in 1:N) {
+    z[i, first[i]] ~ dcat(delta[1:2])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i, j - 1])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
+    }
+  }
+})
+```
+
+```{r}
+constants <- list(
+  N = nrow(y),
+  T = ncol(y),
+  sex = sex,
+  K = max(sex),
+  first = first,
+  oxyd = oxyd
+)
+```
+
+```{r}
+initial_values <- function() {
+  list(
+    beta = rnorm(length(unique(oxyd)), 0, 1),
+    p = runif(2, 0, 1),
+    z = t(apply(y, 1, zinits))
+  )
+}
+```
+
+```{r}
+monitor = c("p", "phi", "beta")
+```
+
+```{r}
+mcmc_2 <- nimbleMCMC(
+  code = model_oxy_cat,
+  constants = constants,
+  data = data,
+  inits = initial_values,
+  monitors = monitor,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  summary = TRUE,
+  WAIC = TRUE
+)
+```
+
+```{r}
+MCMCsummary(mcmc_2$samples, params = "beta")
+mcmc_2$WAIC
 ```

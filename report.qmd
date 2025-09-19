@@ -339,13 +339,15 @@ constants <- list(
 ```
 
 ```{r}
-initial_values <- function() {
+get_init_vals <- function() {
   list(
     beta = rnorm(1, 0, 1),
     p = runif(2, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
+
+initial_values <- rep(get_init_vals(), 4)
 ```
 
 ```{r}
@@ -437,13 +439,15 @@ constants <- list(
 ```
 
 ```{r}
-initial_values <- function() {
+get_init_vals <- function(data) {
   list(
-    beta = rnorm(length(unique(oxyd)), 0, 1),
+    beta = rnorm(length(unique(data)), 0, 1),
     p = runif(2, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
+
+initial_values <- rep(get_init_vals(oxyd), 4)
 ```
 
 ```{r}
@@ -489,13 +493,7 @@ constants <- list(
 ```
 
 ```{r}
-initial_values <- function() {
-  list(
-    beta = rnorm(length(unique(oxyd_2D)), 0, 1),
-    p = runif(2, 0, 1),
-    z = t(apply(y, 1, zinits))
-  )
-}
+initial_values <- rep(get_init_vals(oxyd_2D), 4)
 ```
 
 ```{r}
@@ -537,13 +535,7 @@ constants <- list(
 ```
 
 ```{r}
-initial_values <- function() {
-  list(
-    beta = rnorm(length(unique(oxyd_3D)), 0, 1),
-    p = runif(2, 0, 1),
-    z = t(apply(y, 1, zinits))
-  )
-}
+initial_values <- rep(get_init_vals(oxyd_3D), 4)
 ```
 
 ```{r}
@@ -585,13 +577,7 @@ constants <- list(
 ```
 
 ```{r}
-initial_values <- function() {
-  list(
-    beta = rnorm(length(unique(oxyd_mf)), 0, 1),
-    p = runif(2, 0, 1),
-    z = t(apply(y, 1, zinits))
-  )
-}
+initial_values <- rep(get_init_vals(oxyd_mf), 4)
 ```
 
 ```{r}

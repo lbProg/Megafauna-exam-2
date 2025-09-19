@@ -60,6 +60,7 @@ Converting CMR data from 0-1 to 1-2 and storing sex in a vector :
 ```{r}
 data <- list(y = y + 1)
 sex <- as.integer(raw_data$sex)
+k <- max(sex)
 ```
 
 ```{r}
@@ -114,7 +115,7 @@ model <- nimbleCode({
   delta[2] <- 0
 
   alpha_sex_phi[1] <- 0
-  for (k in 2:K) {
+  for (k in 1:K) {
     alpha_sex_phi[k] ~ dnorm(0, sd = 1.5)
   }
   for (t in 1:(T - 1)) {
@@ -160,7 +161,7 @@ constants <- list(
   T = ncol(y),
   first = first,
   sex = sex,
-  k = max(sex)
+  K = max(sex)
 )
 ```
 
@@ -250,7 +251,7 @@ pool_n <- function(data, sex, n_female, n_male) {
   data[sex == 2 & !(data %in% unique_d_female)] <- 1
   data[sex == 1 & !(data %in% unique_d_male)] <- 1
 
-  as.numeric(data)
+  match(data, levels(factor(data)))
 }
 ```
 
@@ -468,60 +469,10 @@ MCMCsummary(mcmc_2$samples, params = "beta")
 mcmc_2$WAIC
 ```
 
-## $log(OXY)$ as a categorical variable with pooling except last two deciles
+## $log(OXY)$ as a pooled categorical variable (except last two deciles)
 
 ```{r}
 oxyd_2D <- pool_n(oxyd, raw_data$sex, 2, 2)
-```
-
-```{r}
-model_oxy_cat <- nimbleCode({
-  delta[1] <- 1
-  delta[2] <- 0
-
-  for (t in 1:(T - 1)) {
-    eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
-  }
-
-  for (i in 1:length(unique(oxyd))) {
-    beta[i] ~ dnorm(0, 1.5)
-  }
-
-  for (i in 1:N) {
-    for (t in 1:(T - 1)) {
-      logit(phi[i, t]) <- muphi +
-        eps_phi[t] +
-        beta[oxyd[i]]
-
-      gamma[1, 1, i, t] <- phi[i, t]
-      gamma[1, 2, i, t] <- 1 - phi[i, t]
-      gamma[2, 1, i, t] <- 0
-      gamma[2, 2, i, t] <- 1
-    }
-  }
-
-  for (k in 1:K) {
-    p[k] ~ dunif(0, 1)
-  }
-
-  for (i in 1:N) {
-    omega[1, 1, i] <- 1 - p[sex[i]]
-    omega[1, 2, i] <- p[sex[i]]
-    omega[2, 1, i] <- 1
-    omega[2, 2, i] <- 0
-  }
-
-  muphi ~ dnorm(0, sd = 1.5)
-  sdeps_phi ~ dunif(0, 10)
-
-  for (i in 1:N) {
-    z[i, first[i]] ~ dcat(delta[1:2])
-    for (j in (first[i] + 1):T) {
-      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i, j - 1])
-      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
-    }
-  }
-})
 ```
 
 ```{r}
@@ -531,14 +482,14 @@ constants <- list(
   sex = sex,
   K = max(sex),
   first = first,
-  oxyd = oxyd
+  oxyd = oxyd_2D
 )
 ```
 
 ```{r}
 initial_values <- function() {
   list(
-    beta = rnorm(length(unique(oxyd)), 0, 1),
+    beta = rnorm(length(unique(oxyd_2D)), 0, 1),
     p = runif(2, 0, 1),
     z = t(apply(y, 1, zinits))
   )
@@ -546,11 +497,7 @@ initial_values <- function() {
 ```
 
 ```{r}
-monitor = c("p", "phi", "beta")
-```
-
-```{r}
-mcmc_2 <- nimbleMCMC(
+mcmc_3 <- nimbleMCMC(
   code = model_oxy_cat,
   constants = constants,
   data = data,
@@ -565,6 +512,100 @@ mcmc_2 <- nimbleMCMC(
 ```
 
 ```{r}
-MCMCsummary(mcmc_2$samples, params = "beta")
-mcmc_2$WAIC
+MCMCsummary(mcmc_3$samples, params = "beta")
+mcmc_3$WAIC
+```
+
+## $log(OXY)$ as a pooled categorical variable (except last three deciles)
+
+```{r}
+oxyd_3D <- pool_n(oxyd, raw_data$sex, 3, 3)
+```
+
+```{r}
+constants <- list(
+  N = nrow(y),
+  T = ncol(y),
+  sex = sex,
+  K = max(sex),
+  first = first,
+  oxyd = oxyd_3D
+)
+```
+
+```{r}
+initial_values <- function() {
+  list(
+    beta = rnorm(length(unique(oxyd_3D)), 0, 1),
+    p = runif(2, 0, 1),
+    z = t(apply(y, 1, zinits))
+  )
+}
+```
+
+```{r}
+mcmc_4 <- nimbleMCMC(
+  code = model_oxy_cat,
+  constants = constants,
+  data = data,
+  inits = initial_values,
+  monitors = monitor,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  summary = TRUE,
+  WAIC = TRUE
+)
+```
+
+```{r}
+MCMCsummary(mcmc_4$samples, params = "beta")
+mcmc_4$WAIC
+```
+
+## $log(OXY)$ as a pooled categorical variable (except last two or three deciles depending on sex)
+
+```{r}
+oxyd_mf <- pool_n(oxyd, raw_data$sex, 2, 3)
+```
+
+```{r}
+constants <- list(
+  N = nrow(y),
+  T = ncol(y),
+  sex = sex,
+  K = max(sex),
+  first = first,
+  oxyd = oxyd_mf
+)
+```
+
+```{r}
+initial_values <- function() {
+  list(
+    beta = rnorm(length(unique(oxyd_mf)), 0, 1),
+    p = runif(2, 0, 1),
+    z = t(apply(y, 1, zinits))
+  )
+}
+```
+
+```{r}
+mcmc_5 <- nimbleMCMC(
+  code = model_oxy_cat,
+  constants = constants,
+  data = data,
+  inits = initial_values,
+  monitors = monitor,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  summary = TRUE,
+  WAIC = TRUE
+)
+```
+
+```{r}
+MCMCsummary(mcmc_5$samples, params = "beta")
+mcmc_5$WAIC
 ```

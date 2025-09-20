@@ -31,7 +31,7 @@ library(nimble)
 ## Data
 
 ```{r}
-data <- read.csv(here("Data/input.csv"))
+raw_data <- read.csv(here("Data/input.csv"))
 ```
 
 For reproducibility, we set the global seed and the seeds for each of the chains in our models.
@@ -44,7 +44,7 @@ chain_seeds <- c(1, 2, 3, 4)
 Fetching the CMR data :
 
 ```{r}
-y <- data |>
+y <- raw_data |>
     select(x97:x04) |>
     as.matrix()
 
@@ -60,7 +60,7 @@ Converting CMR data from 0-1 to 1-2 and storing sex in a vector :
 
 ```{r}
 my.data <- list(y = y + 1)
-SEX <- as.integer(data$sex)
+SEX <- as.integer(raw_data$sex)
 K <- length(unique(SEX))
 TIME <- c(1,2,3,4,5,6,7,8)
 TIME <- as.numeric(scale(TIME))
@@ -1124,6 +1124,7 @@ Scale $log(OXY)$
 
 ```{r}
 log_oxy_sc <- as.vector(scale(log_oxy))
+sex <- as.integer(raw_data$sex)
 ```
 
 ```{r}
@@ -1177,7 +1178,7 @@ constants <- list(
   N = nrow(y),
   T = ncol(y),
   sex = sex,
-  K = max(sex),
+  K = length(unique(sex)),
   first = first,
   oxy = log_oxy_sc
 )
@@ -1203,13 +1204,13 @@ monitor = c("p", "phi", "beta")
 mcmc_1 <- nimbleMCMC(
   code = model_oxy_cont,
   constants = constants,
-  data = data,
+  data = my.data,
   inits = initial_values,
   monitors = monitor,
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
-  setSeed = chain_seed,
+  setSeed = chain_seeds,
   summary = TRUE,
   WAIC = TRUE
 )
@@ -1303,13 +1304,13 @@ monitor = c("p", "phi", "beta")
 mcmc_2 <- nimbleMCMC(
   code = model_oxy_cat,
   constants = constants,
-  data = data,
+  data = my.data,
   inits = initial_values,
   monitors = monitor,
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
-  setSeed = chain_seed,
+  setSeed = chain_seeds,
   summary = TRUE,
   WAIC = TRUE
 )
@@ -1393,7 +1394,7 @@ mcmc_4 <- nimbleMCMC(
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
-  setSeed = chain_seed,
+  setSeed = chain_seeds,
   summary = TRUE,
   WAIC = TRUE
 )
@@ -1435,7 +1436,7 @@ mcmc_5 <- nimbleMCMC(
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
-  setSeed = chain_seed,
+  setSeed = chain_seeds,
   summary = TRUE,
   WAIC = TRUE
 )

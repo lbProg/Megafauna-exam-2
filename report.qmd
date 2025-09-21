@@ -335,7 +335,7 @@ params <- c(
   "alpha_phi0",
   "beta_phi_time",
   "beta_phi_sex"
-  ```
+```
 
 Running the MCMC :
 
@@ -1060,6 +1060,27 @@ mcmc_p._phi. <- nimbleMCMC(
 ```{r}
 mcmc_p._phi.$WAIC
 ```
+
+## Summary WAIC
+
+|         |            |                |               |                |           |
+|:---------:|:--------:|:-------:|:--------:|:---------:|:---------:|
+| $Model$ | $p$ \~ sex |   $p$ \~ time  | $\phi$ \~ sex | $\phi$ \~ time |  $WAIC$   |
+|    1    |    cat     |      cat       |      cat      |      cat       |    549    |
+|    2    |    cat     |       RE       |      cat      |      cat       |    551    |
+|    3    |    cat     |    constant    |      cat      |      cat       | **531\*** |
+|    4    |  constant  |    constant    |      cat      |      cat       |    534    |
+|    5    |    cat     |    constant    |      cat      |       RE       |    535    |
+|    6    |    cat     |    constant    |      cat      |   continuous   |    536    |
+|    7    |    cat     |    constant    |      cat      |    constant    |    538    |
+|    8    |    cat     |    constant    |   constant    |       RE       | **533\*** |
+|    9    |  constant  |    constant    |   constant    |    constant    |    541    |
+
+cat = categorical ; RE = random effect
+
+**\***Best models (2 models are considered equivalent if $\Delta$WAIC ≤ 2
+
+We selected **model 8** for subsequent analyses because its WAIC is equivalent to that of model 3, but model 8 is more parsimonious.
 
 # 2. Effect of oxychlordane (OXY)
 

@@ -735,8 +735,7 @@ hmm.p.sex_phi.timeCONT.sex <- nimbleCode({
 
   alpha_phi0 ~ dnorm(0, sd = 1.5) # survival intercept
   beta_time ~ dnorm(0, sd = 1.5) # prior intercept
-  mup ~ dnorm(0, sd = 1.5) # prior intercept on the logit scale
-  sdeps_p ~ dunif(0, 10) # prior standard deviation for the random effect
+
   # likelihood
   for (i in 1:N) {
     z[i, first[i]] ~ dcat(delta[1:2])
@@ -893,7 +892,6 @@ mcmc_p.sex_phi.sex$WAIC
 |      | $p$         | $\phi$        |
 |------|-------------|---------------|
 | Time | constant    | random effect |
-| Sex  | categorical | constant      |
 
 Model code :
 
@@ -960,8 +958,8 @@ params <- c("p", "muphi", "sdeps_phi")
 Running the MCMC :
 
 ```{r}
-mcmc_p.sex_phi.timeRE <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeRE,
+mcmc_p.sex_phi.sex <- nimbleMCMC(
+  code = hmm.p.sex_phi.sex,
   constants = my.constants,
   data = my.data,
   inits = initial.values,
@@ -976,7 +974,7 @@ mcmc_p.sex_phi.timeRE <- nimbleMCMC(
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE$WAIC
+mcmc_p.sex_phi.sex$WAIC
 ```
 
 ## Model 9
@@ -1158,8 +1156,7 @@ model_oxy_cont <- nimbleCode({
   delta[1] <- 1
   delta[2] <- 0
   
-  p[1] <- 0
-  for (k in 2:K) {
+  for (k in 1:K) {
     p[k] ~ dunif(0, 1)
   }
 
@@ -1216,7 +1213,7 @@ constants <- list(
 get_init_vals <- function() {
   list(
     beta = rnorm(1, 0, sd = 1.5),
-    p = c(0, runif(K-1, 0, 1)),
+    p = runif(K-1, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -1256,8 +1253,7 @@ model_oxy_cat <- nimbleCode({
   delta[1] <- 1
   delta[2] <- 0
   
-  p[1] <- 0
-    for (k in 2:K) {
+    for (k in 1:K) {
     p[k] ~ dunif(0, 1)
   }
 
@@ -1267,7 +1263,7 @@ model_oxy_cat <- nimbleCode({
 
   beta[1] <- 0
   for (g in 2:G) {
-    beta[i] ~ dnorm(0, sd = 1.5)
+    beta[g] ~ dnorm(0, sd = 1.5)
   }
 
   for (i in 1:N) {
@@ -1319,7 +1315,7 @@ constants <- list(
 get_init_vals <- function(data) {
   list(
     beta = c(0, rnorm(G-1, 0, 1.5)),
-    p = c(0, runif(K-1, 0, 1)),
+    p = runif(K-1, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -1452,8 +1448,7 @@ model_oxy_cat_mf <- nimbleCode({
   delta[1] <- 1
   delta[2] <- 0
   
-  p[1] <- 0
-    for (k in 2:K) {
+    for (k in 1:K) {
     p[k] ~ dunif(0, 1)
   }
 
@@ -1522,7 +1517,7 @@ makeinits <- function() {
       beta_matrix[2,1:G] <- rnorm(G,0,1)
       beta_matrix
     },
-    p = c(0, runif(K-1,0,1)),
+    p = runif(K-1,0,1),
     muphi = rnorm(1,0,1),
     sdeps_phi = rnorm(1,0,3),
     

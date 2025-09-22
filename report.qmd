@@ -62,6 +62,8 @@ Converting CMR data from 0-1 to 1-2 and storing sex in a vector :
 my.data <- list(y = y + 1)
 SEX <- as.integer(raw_data$sex)
 K <- length(unique(SEX))
+N <- nrow(y)
+T <- ncol(y)
 TIME <- c(1, 2, 3, 4, 5, 6, 7, 8)
 TIME <- as.numeric(scale(TIME))
 ```
@@ -334,7 +336,7 @@ params <- c(
   "beta_p_sex",
   "alpha_phi0",
   "beta_phi_time",
-  "beta_phi_sex"
+  "beta_phi_sex")
 ```
 
 Running the MCMC :
@@ -1063,18 +1065,18 @@ mcmc_p._phi.$WAIC
 
 ## Summary WAIC
 
-|         |            |                |               |                |           |
-|:---------:|:--------:|:-------:|:--------:|:---------:|:---------:|
-| $Model$ | $p$ \~ sex |   $p$ \~ time  | $\phi$ \~ sex | $\phi$ \~ time |  $WAIC$   |
-|    1    |    cat     |      cat       |      cat      |      cat       |    549    |
-|    2    |    cat     |       RE       |      cat      |      cat       |    551    |
-|    3    |    cat     |    constant    |      cat      |      cat       | **531\*** |
-|    4    |  constant  |    constant    |      cat      |      cat       |    534    |
-|    5    |    cat     |    constant    |      cat      |       RE       |    535    |
-|    6    |    cat     |    constant    |      cat      |   continuous   |    536    |
-|    7    |    cat     |    constant    |      cat      |    constant    |    538    |
-|    8    |    cat     |    constant    |   constant    |       RE       | **533\*** |
-|    9    |  constant  |    constant    |   constant    |    constant    |    541    |
+|         |            |             |               |                |           |
+|:-------:|:----------:|:-----------:|:-------------:|:--------------:|:---------:|
+| $Model$ | $p$ \~ sex | $p$ \~ time | $\phi$ \~ sex | $\phi$ \~ time |  $WAIC$   |
+|    1    |    cat     |     cat     |      cat      |      cat       |    549    |
+|    2    |    cat     |     RE      |      cat      |      cat       |    551    |
+|    3    |    cat     |  constant   |      cat      |      cat       | **531\*** |
+|    4    |  constant  |  constant   |      cat      |      cat       |    534    |
+|    5    |    cat     |  constant   |      cat      |       RE       |    535    |
+|    6    |    cat     |  constant   |      cat      |   continuous   |    536    |
+|    7    |    cat     |  constant   |      cat      |    constant    |    538    |
+|    8    |    cat     |  constant   |   constant    |       RE       | **533\*** |
+|    9    |  constant  |  constant   |   constant    |    constant    |    541    |
 
 cat = categorical ; RE = random effect
 
@@ -1256,7 +1258,7 @@ model_oxy_cat <- nimbleCode({
   }
 
   for (i in 1:length(unique(oxyd))) {
-    beta[i] ~ dnorm(0, 1.5)
+    beta[i] ~ dnorm(0, sd = 1.5)
   }
 
   for (i in 1:N) {
@@ -1310,7 +1312,7 @@ constants <- list(
 ```{r}
 get_init_vals <- function(data) {
   list(
-    beta = rnorm(length(unique(data)), 0, 1),
+    beta = rnorm(length(unique(data)), 0, 1.5),
     p = runif(2, 0, 1),
     z = t(apply(y, 1, zinits))
   )

@@ -1150,12 +1150,18 @@ Scale $log(OXY)$
 ```{r}
 log_oxy_sc <- as.vector(scale(log_oxy))
 sex <- as.integer(raw_data$sex)
+G <- length(unique(oxyd))
 ```
 
 ```{r}
 model_oxy_cont <- nimbleCode({
   delta[1] <- 1
   delta[2] <- 0
+  
+  p[1] <- 0
+  for (k in 2:K) {
+    p[k] ~ dunif(0, 1)
+  }
 
   for (t in 1:(T - 1)) {
     eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
@@ -1172,9 +1178,6 @@ model_oxy_cont <- nimbleCode({
     }
   }
 
-  for (k in 1:K) {
-    p[k] ~ dunif(0, 1)
-  }
 
   for (i in 1:N) {
     omega[1, 1, i] <- 1 - p[sex[i]]
@@ -1200,10 +1203,10 @@ model_oxy_cont <- nimbleCode({
 
 ```{r}
 constants <- list(
-  N = nrow(y),
-  T = ncol(y),
+  N = N,
+  T = T,
   sex = sex,
-  K = length(unique(sex)),
+  K = K,
   first = first,
   oxy = log_oxy_sc
 )
@@ -1212,8 +1215,8 @@ constants <- list(
 ```{r}
 get_init_vals <- function() {
   list(
-    beta = rnorm(1, 0, 1),
-    p = runif(2, 0, 1),
+    beta = rnorm(1, 0, sd = 1.5),
+    p = c(0, runif(K-1, 0, 1)),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -1252,12 +1255,18 @@ mcmc_1$WAIC
 model_oxy_cat <- nimbleCode({
   delta[1] <- 1
   delta[2] <- 0
+  
+  p[1] <- 0
+    for (k in 2:K) {
+    p[k] ~ dunif(0, 1)
+  }
 
   for (t in 1:(T - 1)) {
     eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
   }
 
-  for (i in 1:length(unique(oxyd))) {
+  beta[1] <- 0
+  for (g in 2:G) {
     beta[i] ~ dnorm(0, sd = 1.5)
   }
 
@@ -1272,10 +1281,6 @@ model_oxy_cat <- nimbleCode({
       gamma[2, 1, i, t] <- 0
       gamma[2, 2, i, t] <- 1
     }
-  }
-
-  for (k in 1:K) {
-    p[k] ~ dunif(0, 1)
   }
 
   for (i in 1:N) {
@@ -1300,10 +1305,11 @@ model_oxy_cat <- nimbleCode({
 
 ```{r}
 constants <- list(
-  N = nrow(y),
-  T = ncol(y),
+  N = N,
+  T = T,
   sex = sex,
-  K = max(sex),
+  K = K,
+  G = G,
   first = first,
   oxyd = oxyd
 )
@@ -1312,8 +1318,8 @@ constants <- list(
 ```{r}
 get_init_vals <- function(data) {
   list(
-    beta = rnorm(length(unique(data)), 0, 1.5),
-    p = runif(2, 0, 1),
+    beta = c(0, rnorm(G-1, 0, 1.5)),
+    p = c(0, runif(K-1, 0, 1)),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -1350,14 +1356,16 @@ mcmc_2$WAIC
 
 ```{r}
 oxyd_2D <- pool_n(oxyd, raw_data$sex, 2, 2)
+G <- length(unique(oxyd_2D))
 ```
 
 ```{r}
 constants <- list(
-  N = nrow(y),
-  T = ncol(y),
+  N = N,
+  T = T,
   sex = sex,
-  K = max(sex),
+  K = K,
+  G = G,
   first = first,
   oxyd = oxyd_2D
 )
@@ -1392,14 +1400,16 @@ mcmc_3$WAIC
 
 ```{r}
 oxyd_3D <- pool_n(oxyd, raw_data$sex, 3, 3)
+G <- length(unique(oxyd_3D))
 ```
 
 ```{r}
 constants <- list(
-  N = nrow(y),
-  T = ncol(y),
+  N = N,
+  T = T,
   sex = sex,
-  K = max(sex),
+  K = K,
+  G = G,
   first = first,
   oxyd = oxyd_3D
 )
@@ -1434,26 +1444,98 @@ mcmc_4$WAIC
 
 ```{r}
 oxyd_mf <- pool_n(oxyd, raw_data$sex, 2, 3)
+G <- length(unique(oxyd_mf))
 ```
 
 ```{r}
+model_oxy_cat_mf <- nimbleCode({
+  delta[1] <- 1
+  delta[2] <- 0
+  
+  p[1] <- 0
+    for (k in 2:K) {
+    p[k] ~ dunif(0, 1)
+  }
+
+  for (t in 1:(T - 1)) {
+    eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
+  }
+
+  beta[1,1] <- 0 # baseline (sex = 1 & class = 1)
+  for (g in 2:G) {
+    beta[1,g] ~ dnorm(0, sd = 1.5)
+    beta[2,g] ~ dnorm(0, sd = 1.5)
+  }
+
+  for (i in 1:N) {
+    for (t in 1:(T - 1)) {
+      logit(phi[i, t]) <- muphi +
+        eps_phi[t] +
+        beta[sex[i], oxyd[i]]
+
+      gamma[1, 1, i, t] <- phi[i, t]
+      gamma[1, 2, i, t] <- 1 - phi[i, t]
+      gamma[2, 1, i, t] <- 0
+      gamma[2, 2, i, t] <- 1
+    }
+  }
+
+  for (i in 1:N) {
+    omega[1, 1, i] <- 1 - p[sex[i]]
+    omega[1, 2, i] <- p[sex[i]]
+    omega[2, 1, i] <- 1
+    omega[2, 2, i] <- 0
+  }
+
+  muphi ~ dnorm(0, sd = 1.5)
+  sdeps_phi ~ dunif(0, 10)
+
+  for (i in 1:N) {
+    z[i, first[i]] ~ dcat(delta[1:2])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i, j - 1])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
+    }
+  }
+})
+```
+
+
+```{r}
 constants <- list(
-  N = nrow(y),
-  T = ncol(y),
+  N = N,
+  T = T,
   sex = sex,
-  K = max(sex),
+  K = K,
+  G = G,
   first = first,
   oxyd = oxyd_mf
 )
 ```
 
 ```{r}
-initial_values <- rep(get_init_vals(oxyd_mf), 4)
+makeinits <- function() {
+  list(
+    beta = {
+      beta_matrix <- matrix(0, nrow = K, ncol = G)
+      beta_matrix[1,2:G] <- rnorm(G-1,0,1)
+      beta_matrix[2,1:G] <- rnorm(G,0,1)
+      beta_matrix
+    },
+    p = c(0, runif(K-1,0,1)),
+    muphi = rnorm(1,0,1),
+    sdeps_phi = rnorm(1,0,3),
+    
+    z = t(apply(y, 1, zinits))
+  )
+}
+
+initial.values <- replicate(4, makeinits(), simplify = FALSE)
 ```
 
 ```{r}
 mcmc_5 <- nimbleMCMC(
-  code = model_oxy_cat,
+  code = model_oxy_cat_mf,
   constants = constants,
   data = data,
   inits = initial_values,

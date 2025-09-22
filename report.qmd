@@ -892,6 +892,7 @@ mcmc_p.sex_phi.sex$WAIC
 |      | $p$         | $\phi$        |
 |------|-------------|---------------|
 | Time | constant    | random effect |
+| Sex  | categorical | constant      |
 
 Model code :
 
@@ -1494,7 +1495,6 @@ model_oxy_cat_mf <- nimbleCode({
   }
 })
 ```
-
 
 ```{r}
 constants <- list(

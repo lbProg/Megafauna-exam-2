@@ -103,7 +103,7 @@ n_thin <- 1
 
 Selecting a model where survival probabliity and detection probability depend on time and sex. We will compare WAIC values to select the best model.
 
-From the modt complex model to the most simple.
+From the most complex model to the most simple.
 
 ## Model 1
 
@@ -111,6 +111,10 @@ From the modt complex model to the most simple.
 |------|-------------|-------------|
 | Time | categorical | categorical |
 | Sex  | categorical | categorical |
+
+$p$ : Detectability could vary among years, depending on weather or the effort for example. Here, treating time as a categorical covariate rather than a continuous one allows a non-linear trend. It could also differ between sexes due to differences in their behavior.
+
+$\phi$ : Survival could vary according to fluctuating environmental conditions. Moreover, sex differences in physiology, behavior or reproductive investment can make them more or less likely to survive.
 
 Model code :
 
@@ -222,9 +226,9 @@ mcmc_p.time.sex_phi.time.sex <- nimbleMCMC(
   data = my.data,
   inits = initial.values,
   monitors = params,
-  niter = 20000,
-  nburnin = 5000,
-  nchains = 4,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
   summary = TRUE,
   setSeed = chain_seeds,
   WAIC = TRUE
@@ -241,6 +245,8 @@ mcmc_p.time.sex_phi.time.sex$WAIC
 |------|---------------|-------------|
 | Time | random effect | categorical |
 | Sex  | categorical   | categorical |
+
+Detection is expected to fluctuate randomly among years due to variable field conditions.
 
 Model code :
 
@@ -348,9 +354,9 @@ mcmc_p.timeRE.sex_phi.timeCAT.sex <- nimbleMCMC(
   data = my.data,
   inits = initial.values,
   monitors = params,
-  niter = 20000,
-  nburnin = 5000,
-  nchains = 4,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
   summary = TRUE,
   setSeed = chain_seeds,
   WAIC = TRUE
@@ -367,6 +373,8 @@ mcmc_p.timeRE.sex_phi.timeCAT.sex$WAIC
 |------|-------------|-------------|
 | Time | constant    | categorical |
 | Sex  | categorical | categorical |
+
+Detection could be stable accross years because of standardized protocols, same observer effort among years and site-fidelity of seabirds.
 
 Model code :
 
@@ -483,6 +491,8 @@ mcmc_p.sex_phi.timeCAT.sex$WAIC
 | Time | constant | categorical |
 | Sex  | constant | categorical |
 
+In colonial seabirds, males and females attend nests at overlapping times. Because both sexes are equally present, observers are not more likely to detect one sex over the other.
+
 Model code :
 
 ```{r}
@@ -585,6 +595,8 @@ mcmc_p._phi.timeCAT.sex <- nimbleMCMC(
 ```{r}
 mcmc_p._phi.timeCAT.sex$WAIC
 ```
+
+Since the best model for $p$ is **model 3** ($p$ depends only on sex as a categorical covariate), it was retained for selecting the best model for $\phi$.
 
 ## Model 5
 
@@ -699,6 +711,8 @@ mcmc_p.sex_phi.timeRE.sex$WAIC
 | Time | constant    | continuous  |
 | Sex  | categorical | categorical |
 
+A continuous time effect allows survival to reflect gradual directional changes driven by long-term environmental or contaminant trends.
+
 Model code :
 
 ```{r}
@@ -803,6 +817,8 @@ mcmc_p.sex_phi.timeCONT.sex$WAIC
 |------|-------------|-------------|
 | Time | constant    | constant    |
 | Sex  | categorical | categorical |
+
+Adult survival in long-lived species such as *Larus hyperboreus* can be buffered against short-term environmental fluctuations, so it can be considered as constant accoss years.
 
 Model code :
 
@@ -985,6 +1001,8 @@ mcmc_p.sex_phi.sex$WAIC
 | Time | constant | constant |
 | Sex  | constant | constant |
 
+Survival may be the same between sexes if their behavior is similar as their reproductive investment.
+
 Model code :
 
 ```{r}
@@ -1125,7 +1143,7 @@ pool_n <- function(data, sex, n_female, n_male) {
 ```
 
 ```{r}
-data.frame(x = oxyd, sex = raw_data$sex, y = pool_n(oxyd, raw_data$sex, 2, 3))
+data.frame(x = oxyd, SEX = raw_data$sex, y = pool_n(oxyd, raw_data$sex, 2, 3))
 ```
 
 ## Model selection strategy
@@ -1148,17 +1166,24 @@ Scale $log(OXY)$
 
 ```{r}
 log_oxy_sc <- as.vector(scale(log_oxy))
-sex <- as.integer(raw_data$sex)
+SEX <- as.integer(raw_data$sex)
 G <- length(unique(oxyd))
 ```
 
 ```{r}
-model_oxy_cont <- nimbleCode({
+model_oxyCONT <- nimbleCode({
   delta[1] <- 1
   delta[2] <- 0
   
   for (k in 1:K) {
     p[k] ~ dunif(0, 1)
+  }
+  
+  for (i in 1:N) {
+    omega[1, 1, i] <- 1 - p[sex[i]]
+    omega[1, 2, i] <- p[sex[i]]
+    omega[2, 1, i] <- 1
+    omega[2, 2, i] <- 0
   }
 
   for (t in 1:(T - 1)) {
@@ -1174,14 +1199,6 @@ model_oxy_cont <- nimbleCode({
       gamma[2, 1, i, t] <- 0
       gamma[2, 2, i, t] <- 1
     }
-  }
-
-
-  for (i in 1:N) {
-    omega[1, 1, i] <- 1 - p[sex[i]]
-    omega[1, 2, i] <- p[sex[i]]
-    omega[2, 1, i] <- 1
-    omega[2, 2, i] <- 0
   }
 
   muphi ~ dnorm(0, sd = 1.5)
@@ -1200,10 +1217,10 @@ model_oxy_cont <- nimbleCode({
 ```
 
 ```{r}
-constants <- list(
+my.constants <- list(
   N = N,
   T = T,
-  sex = sex,
+  sex = SEX,
   K = K,
   first = first,
   oxy = log_oxy_sc
@@ -1214,43 +1231,44 @@ constants <- list(
 get_init_vals <- function() {
   list(
     beta = rnorm(1, 0, sd = 1.5),
-    p = runif(K-1, 0, 1),
+    p = runif(K, 0, 1),
+    muphi = rnorm(1,0,1),
+    sdeps_phi = runif(1,0,3),
     z = t(apply(y, 1, zinits))
   )
 }
 
-initial_values <- rep(get_init_vals(), 4)
+initial.values <- rep(get_init_vals(), 4)
 ```
 
 ```{r}
-monitor = c("p", "phi", "beta")
+params = c("p", "muphi","sdeps_phi", "beta")
 ```
 
 ```{r}
-mcmc_1 <- nimbleMCMC(
-  code = model_oxy_cont,
-  constants = constants,
+mcmc_oxyCONT <- nimbleMCMC(
+  code = model_oxyCONT,
+  constants = my.constants,
   data = my.data,
-  inits = initial_values,
-  monitors = monitor,
+  inits = initial.values,
+  monitors = params,
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
-  setSeed = chain_seeds,
   summary = TRUE,
+  setSeed = chain_seeds,
   WAIC = TRUE
 )
 ```
 
 ```{r}
-MCMCsummary(mcmc_1$samples, params = "beta")
-mcmc_1$WAIC
+mcmc_oxyCONT$WAIC
 ```
 
 ## $log(OXY)$ as a categorical variable
 
 ```{r}
-model_oxy_cat <- nimbleCode({
+model_oxyCAT <- nimbleCode({
   delta[1] <- 1
   delta[2] <- 0
   
@@ -1262,8 +1280,7 @@ model_oxy_cat <- nimbleCode({
     eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
   }
 
-  beta[1] <- 0
-  for (g in 2:G) {
+  for (g in 1:G) {
     beta[g] ~ dnorm(0, sd = 1.5)
   }
 
@@ -1304,7 +1321,7 @@ model_oxy_cat <- nimbleCode({
 constants <- list(
   N = N,
   T = T,
-  sex = sex,
+  sex = SEX,
   K = K,
   G = G,
   first = first,
@@ -1315,13 +1332,13 @@ constants <- list(
 ```{r}
 get_init_vals <- function(data) {
   list(
-    beta = c(0, rnorm(G-1, 0, 1.5)),
-    p = runif(K-1, 0, 1),
+    beta = rnorm(G, 0, 1.5),
+    p = runif(K, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
 
-initial_values <- rep(get_init_vals(oxyd), 4)
+initial.values <- rep(get_init_vals(oxyd), 4)
 ```
 
 ```{r}
@@ -1329,12 +1346,12 @@ monitor = c("p", "phi", "beta")
 ```
 
 ```{r}
-mcmc_2 <- nimbleMCMC(
-  code = model_oxy_cat,
+mcmc_oxyCAT <- nimbleMCMC(
+  code = model_oxyCAT,
   constants = constants,
   data = my.data,
-  inits = initial_values,
-  monitors = monitor,
+  inits = initial.values,
+  monitors = params,
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
@@ -1345,8 +1362,7 @@ mcmc_2 <- nimbleMCMC(
 ```
 
 ```{r}
-MCMCsummary(mcmc_2$samples, params = "beta")
-mcmc_2$WAIC
+mcmc_oxyCAT$WAIC
 ```
 
 ## $log(OXY)$ as a pooled categorical variable (except last two deciles)
@@ -1369,16 +1385,16 @@ constants <- list(
 ```
 
 ```{r}
-initial_values <- rep(get_init_vals(oxyd_2D), 4)
+initial.values <- rep(get_init_vals(oxyd_2D), 4)
 ```
 
 ```{r}
-mcmc_3 <- nimbleMCMC(
-  code = model_oxy_cat,
+mcmc_oxyCAT2D <- nimbleMCMC(
+  code = model_oxyCAT,
   constants = constants,
-  data = data,
-  inits = initial_values,
-  monitors = monitor,
+  data = my.data,
+  inits = initial.values,
+  monitors = params,
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
@@ -1404,7 +1420,7 @@ G <- length(unique(oxyd_3D))
 constants <- list(
   N = N,
   T = T,
-  sex = sex,
+  sex = SEX,
   K = K,
   G = G,
   first = first,
@@ -1413,16 +1429,16 @@ constants <- list(
 ```
 
 ```{r}
-initial_values <- rep(get_init_vals(oxyd_3D), 4)
+initial.values <- rep(get_init_vals(oxyd_3D), 4)
 ```
 
 ```{r}
-mcmc_4 <- nimbleMCMC(
+mcmc_oxycat3D <- nimbleMCMC(
   code = model_oxy_cat,
   constants = constants,
-  data = data,
-  inits = initial_values,
-  monitors = monitor,
+  data = my.data,
+  inits = initial.values,
+  monitors = params,
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
@@ -1445,7 +1461,7 @@ G <- length(unique(oxyd_mf))
 ```
 
 ```{r}
-model_oxy_cat_mf <- nimbleCode({
+model_oxyCATmf <- nimbleCode({
   delta[1] <- 1
   delta[2] <- 0
   
@@ -1457,8 +1473,7 @@ model_oxy_cat_mf <- nimbleCode({
     eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
   }
 
-  beta[1,1] <- 0 # baseline (sex = 1 & class = 1)
-  for (g in 2:G) {
+  for (g in 1:G) {
     beta[1,g] ~ dnorm(0, sd = 1.5)
     beta[2,g] ~ dnorm(0, sd = 1.5)
   }
@@ -1513,11 +1528,11 @@ makeinits <- function() {
   list(
     beta = {
       beta_matrix <- matrix(0, nrow = K, ncol = G)
-      beta_matrix[1,2:G] <- rnorm(G-1,0,1)
+      beta_matrix[1,2:G] <- rnorm(G,0,1)
       beta_matrix[2,1:G] <- rnorm(G,0,1)
       beta_matrix
     },
-    p = runif(K-1,0,1),
+    p = runif(K,0,1),
     muphi = rnorm(1,0,1),
     sdeps_phi = rnorm(1,0,3),
     
@@ -1529,12 +1544,12 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 ```
 
 ```{r}
-mcmc_5 <- nimbleMCMC(
-  code = model_oxy_cat_mf,
+mcmc_oxyCATmf <- nimbleMCMC(
+  code = model_oxyCATmf,
   constants = constants,
-  data = data,
-  inits = initial_values,
-  monitors = monitor,
+  data = my.data,
+  inits = initial.values,
+  monitors = params,
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
@@ -1545,6 +1560,5 @@ mcmc_5 <- nimbleMCMC(
 ```
 
 ```{r}
-MCMCsummary(mcmc_5$samples, params = "beta")
-mcmc_5$WAIC
+mcmc_oxyCATmf$WAIC
 ```

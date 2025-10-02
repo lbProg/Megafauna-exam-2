@@ -1203,7 +1203,7 @@ mcmc_p.sex_phi.timeCAT.oxyCAT2D <- nimbleMCMC(
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
-  setSeed = chain_seed,
+  setSeed = chain_seeds,
   summary = TRUE,
   WAIC = TRUE
 )
@@ -1253,8 +1253,7 @@ mcmc_p.sex_phi.timeCAT.oxyCAT3D <- nimbleMCMC(
 ```
 
 ```{r}
-MCMCsummary(mcmc_4$samples, params = "beta")
-mcmc_4$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCAT3D$WAIC
 ```
 
 ### $log(OXY)$ as a pooled categorical variable (except last two or three deciles depending on sex)

@@ -102,8 +102,8 @@ zinits <- function(y) {
 Global MCMC parameters :
 
 ```{r}
-n_iter <- 100
-n_burnin <-10
+n_iter <- 10
+n_burnin <-1
 n_chains <- 4
 n_thin <- 1
 ```
@@ -1025,10 +1025,10 @@ hmm.p.sex_phi.timeCAT.oxyCONT <- nimbleCode({
 my.constants <- list(
   N = N,
   T = T,
-  sex = SEX,
+  SEX = SEX,
   K = K,
   first = first,
-  oxy = log_oxy_sc
+  OXY = log_oxy_sc
 )
 ```
 
@@ -1052,7 +1052,7 @@ params = c("p", "alpha_phi0", "beta_oxy", "beta_time")
 
 ```{r}
 mcmc_p.sex_phi.timeCAT.oxyCONT <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeRE.oxyCONT,
+  code = hmm.p.sex_phi.timeCAT.oxyCONT,
   constants = my.constants,
   data = my.data,
   inits = initial.values,
@@ -1067,7 +1067,7 @@ mcmc_p.sex_phi.timeCAT.oxyCONT <- nimbleMCMC(
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE.oxyCONT$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCONT$WAIC
 ```
 
 ### $log(OXY)$ as a categorical variable
@@ -1124,7 +1124,7 @@ hmm.p.sex_phi.timeCAT.oxyCAT <- nimbleCode({
 constants <- list(
   N = N,
   T = T,
-  sex = SEX,
+  SEX = SEX,
   K = K,
   G = G,
   first = first,
@@ -1152,7 +1152,7 @@ monitor = c("p", "alpha_phi0", "beta_oxy", "beta_time")
 
 ```{r}
 mcmc_p.sex_phi.timeCAT.oxyCAT <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeRE.oxyCAT,
+  code = hmm.p.sex_phi.timeCAT.oxyCAT,
   constants = constants,
   data = my.data,
   inits = initial.values,
@@ -1167,7 +1167,7 @@ mcmc_p.sex_phi.timeCAT.oxyCAT <- nimbleMCMC(
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE.oxyCAT$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCAT$WAIC
 ```
 
 ### $log(OXY)$ as a pooled categorical variable (except last two deciles)
@@ -1181,7 +1181,7 @@ G <- length(unique(oxyd_2D))
 constants <- list(
   N = N,
   T = T,
-  sex = sex,
+  SEX = SEX,
   K = K,
   G = G,
   first = first,
@@ -1195,7 +1195,7 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 
 ```{r}
 mcmc_p.sex_phi.timeCAT.oxyCAT2D <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeRE.oxyCAT2D,
+  code = hmm.p.sex_phi.timeCAT.oxyCAT,
   constants = constants,
   data = my.data,
   inits = initial.values,
@@ -1210,7 +1210,7 @@ mcmc_p.sex_phi.timeCAT.oxyCAT2D <- nimbleMCMC(
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE.oxyCAT2D$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCAT2D$WAIC
 ```
 
 ### $log(OXY)$ as a pooled categorical variable (except last three deciles)
@@ -1224,7 +1224,7 @@ G <- length(unique(oxyd_3D))
 constants <- list(
   N = N,
   T = T,
-  sex = SEX,
+  SEX = SEX,
   K = K,
   G = G,
   first = first,
@@ -1238,9 +1238,9 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 
 ```{r}
 mcmc_p.sex_phi.timeCAT.oxyCAT3D <- nimbleMCMC(
-  code = model_oxy_cat,
+  code = hmm.p.sex_phi.timeCAT.oxyCAT,
   constants = constants,
-  data = my.data, ####################################################
+  data = my.data,
   inits = initial.values,
   monitors = params,
   niter = n_iter,
@@ -1265,7 +1265,7 @@ G <- length(unique(oxyd_mf))
 ```
 
 ```{r}
-hmm.p.sex_phi.timeRE.oxyCAT_2DF3DM <- nimbleCode({
+hmm.p.sex_phi.timeCAT.oxyCAT_2DF3DM <- nimbleCode({
   delta[1] <- 1          
   delta[2] <- 0 
   
@@ -1320,7 +1320,7 @@ hmm.p.sex_phi.timeRE.oxyCAT_2DF3DM <- nimbleCode({
 constants <- list(
   N = N,
   T = T,
-  sex = sex,
+  SEX = SEX,
   K = K,
   G = G,
   first = first,
@@ -1330,7 +1330,7 @@ constants <- list(
 
 ```{r}
 makeinits <- function() {
-  B <- matrix(rnorm(20, 0, 1), nrow=K, ncol=G)
+  B <- matrix(rnorm(8, 0, 1), nrow = K, ncol = G)
   B[1,1] <- 0
   
   list(
@@ -1346,8 +1346,8 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE.oxyCAT_2DF3DM  <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeRE.oxyCAT_2DF3DM,
+mcmc_p.sex_phi.timeCAT.oxyCAT_2DF3DM  <- nimbleMCMC(
+  code = hmm.p.sex_phi.timeCAT.oxyCAT_2DF3DM,
   constants = constants,
   data = my.data,
   inits = initial.values,
@@ -1362,5 +1362,5 @@ mcmc_p.sex_phi.timeRE.oxyCAT_2DF3DM  <- nimbleMCMC(
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE.oxyCAT_2DF3DM$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCAT_2DF3DM$WAIC
 ```

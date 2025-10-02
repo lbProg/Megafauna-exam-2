@@ -9,6 +9,7 @@ knitr:
     opts_chunk:
         message: FALSE
         warning: FALSE
+        eval: FALSE
 embed-resources: TRUE
 lightbox: TRUE
 toc: TRUE
@@ -21,6 +22,8 @@ df-print: kable
 ## Libraries
 
 ```{r}
+#| eval: true
+
 library(dplyr)
 library(ggplot2)
 library(here)
@@ -32,6 +35,13 @@ library(nimble)
 
 ```{r}
 raw_data <- read.csv(here("Data/input.csv"))
+```
+
+```{r}
+#| include: false
+#| eval: true
+
+load(here("Data/Models_croissant_seed1604_VF.RData"))
 ```
 
 For reproducibility, we set the global seed and the seeds for each of the chains in our models.
@@ -1001,7 +1011,7 @@ mcmc_p.sex_phi.sex$WAIC
 | Time | constant | constant |
 | Sex  | constant | constant |
 
-Survival may be the same between sexes if their behavior is similar as their reproductive investment.
+Survival may be the same between sexes if their behavior is similar to their reproductive investment.
 
 Model code :
 
@@ -1084,7 +1094,7 @@ mcmc_p._phi.$WAIC
 
 |         |            |             |               |                |           |
 |:-------:|:----------:|:-----------:|:-------------:|:--------------:|:---------:|
-| $Model$ | $p$ \~ sex | $p$ \~ time | $\phi$ \~ sex | $\phi$ \~ time |  $WAIC$   |
+| Model   | $p ~ sex$  | $p \~ time$ | $\phi \~ sex$ | $\phi \~ time$ |  $WAIC$   |
 |    1    |    cat     |     cat     |      cat      |      cat       |    549    |
 |    2    |    cat     |     RE      |      cat      |      cat       |    551    |
 |    3    |    cat     |  constant   |      cat      |      cat       | **531\*** |
@@ -1150,13 +1160,13 @@ data.frame(x = oxyd, SEX = raw_data$sex, y = pool_n(oxyd, raw_data$sex, 2, 3))
 
 We will test the folowing models to compare them :
 
-| Model | log(OXY)    | male threshold | female threshold | WAIC |
-|-------|-------------|----------------|------------------|------|
-| 1     | continuous  | na             | na               |      |
-| 2     | categorical | 0              | 0                |      |
-| 3     | categorical | 2              | 2                |      |
-| 5     | categorical | 3              | 3                |      |
-| 6     | categorical | 2              | 3                |      |
+| Model | $log(OXY)$  | male threshold | female threshold |
+|-------|-------------|----------------|------------------|
+| 1     | continuous  | na             | na               |
+| 2     | categorical | 0              | 0                |
+| 3     | categorical | 2              | 2                |
+| 5     | categorical | 3              | 3                |
+| 6     | categorical | 2              | 3                |
 
 ## Running the models : phi depends on OXY
 
@@ -1265,7 +1275,7 @@ mcmc_oxyCONT <- nimbleMCMC(
 mcmc_oxyCONT$WAIC
 ```
 
-## $log(OXY)$ as a categorical variable
+### $log(OXY)$ as a categorical variable
 
 ```{r}
 model_oxyCAT <- nimbleCode({
@@ -1365,7 +1375,7 @@ mcmc_oxyCAT <- nimbleMCMC(
 mcmc_oxyCAT$WAIC
 ```
 
-## $log(OXY)$ as a pooled categorical variable (except last two deciles)
+### $log(OXY)$ as a pooled categorical variable (except last two deciles)
 
 ```{r}
 oxyd_2D <- pool_n(oxyd, raw_data$sex, 2, 2)
@@ -1409,7 +1419,7 @@ MCMCsummary(mcmc_3$samples, params = "beta")
 mcmc_3$WAIC
 ```
 
-## $log(OXY)$ as a pooled categorical variable (except last three deciles)
+### $log(OXY)$ as a pooled categorical variable (except last three deciles)
 
 ```{r}
 oxyd_3D <- pool_n(oxyd, raw_data$sex, 3, 3)
@@ -1453,7 +1463,7 @@ MCMCsummary(mcmc_4$samples, params = "beta")
 mcmc_4$WAIC
 ```
 
-## $log(OXY)$ as a pooled categorical variable (except last two or three deciles depending on sex)
+### $log(OXY)$ as a pooled categorical variable (except last two or three deciles depending on sex)
 
 ```{r}
 oxyd_mf <- pool_n(oxyd, raw_data$sex, 2, 3)

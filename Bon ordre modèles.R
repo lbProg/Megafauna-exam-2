@@ -27,9 +27,7 @@ hmm.p._phi. <- nimbleCode({
 })
 
 
-my.constants <- list(N = N,
-                     T = T,
-                     first = first)
+my.constants <- list(N = N, T = T, first = first)
 
 makeinits <- function() {
   list(
@@ -974,9 +972,9 @@ my.constants <- list(N = N,
 
 makeinits <- function() {
   B <- matrix(NA, nrow=K, ncol=G)
-  B[1,1] <- 0                      # référence
   if (G > 1) B[1, 2:G] <- rnorm(G-1, 0, 1)
   if (K > 1) B[2:K, 1:G] <- rnorm((K-1)*G, 0, 1)
+  B[1,1] <- 0
   
   list(
     p = runif(K, 0, 1),

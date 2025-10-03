@@ -41,6 +41,7 @@ raw_data <- read.csv(here("Data/input.csv"))
 #| eval: true
 
 load(here("Data/Models_croissant_seed1604_VF.RData"))
+load(here("Data/Model8.RData"))
 ```
 
 For reproducibility, we set the global seed and the seeds for each of the chains in our models.
@@ -129,27 +130,26 @@ Model code :
 
 ```{r}
 hmm.p._phi. <- nimbleCode({
-  delta[1] <- 1          
-  delta[2] <- 0 
-  
-  phi~ dunif(0,1)
-  omega[1,1] <- 1 - p
-  omega[1,2] <- p
-  omega[2,1] <- 1
-  omega[2,2] <- 0
-  
-  p ~ dunif(0,1)
-  gamma[1,1] <- phi
-  gamma[1,2] <- 1 - phi
-  gamma[2,1] <- 0
-  gamma[2,2] <- 1
-  
-  
-  for(i in 1:N){
+  delta[1] <- 1
+  delta[2] <- 0
+
+  phi ~ dunif(0, 1)
+  omega[1, 1] <- 1 - p
+  omega[1, 2] <- p
+  omega[2, 1] <- 1
+  omega[2, 2] <- 0
+
+  p ~ dunif(0, 1)
+  gamma[1, 1] <- phi
+  gamma[1, 2] <- 1 - phi
+  gamma[2, 1] <- 0
+  gamma[2, 2] <- 1
+
+  for (i in 1:N) {
     z[i, first[i]] ~ dcat(delta[1:2])
-    for(j in (first[i]+1):T){
-      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2])
-      y[i,j] ~ dcat(omega[z[i,j], 1:2])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2])
     }
   }
 })
@@ -170,9 +170,9 @@ Initial values of the four Markov Chains :
 ```{r}
 makeinits <- function() {
   list(
-    p   = runif(1,0,1),
-    phi = runif(1,0,1),
-    z   = t(apply(y, 1, zinits))
+    p = runif(1, 0, 1),
+    phi = runif(1, 0, 1),
+    z = t(apply(y, 1, zinits))
   )
 }
 
@@ -182,9 +182,7 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 Parameters to monitor :
 
 ```{r}
-params <- c(
-  "phi", "p"
-)  
+params <- c("phi", "p")
 ```
 
 Running the MCMC :
@@ -206,6 +204,8 @@ mcmc_p._phi. <- nimbleMCMC(
 ```
 
 ```{r}
+#| eval: true
+
 mcmc_p._phi.$WAIC
 ```
 
@@ -222,34 +222,31 @@ Model code :
 
 ```{r}
 hmm.p.timeRE_phi. <- nimbleCode({
-  delta[1] <- 1          # Pr(alive t = 1) = 1
-  delta[2] <- 0          # Pr(dead t = 1) = 0
-  
-  for (t in 1:(T-1)){
-    logit(p[t]) <- mup + eps_p[t] # eps is the random effect (epsilon)
+  delta[1] <- 1
+  delta[2] <- 0
+
+  for (t in 1:(T - 1)) {
+    logit(p[t]) <- mup + eps_p[t]
     eps_p[t] ~ dnorm(0, sd = sdeps_p)
-    omega[1,1,t] <- 1 - p[t]    # Pr(alive t -> non-detected t)
-    omega[1,2,t] <- p[t]        # Pr(alive t -> detected t)
-    omega[2,1,t] <- 1           # Pr(dead t -> non-detected t)
-    omega[2,2,t] <- 0           # Pr(dead t -> detected t)
+    omega[1, 1, t] <- 1 - p[t]
+    omega[1, 2, t] <- p[t]
+    omega[2, 1, t] <- 1
+    omega[2, 2, t] <- 0
   }
 
-  phi ~ dunif(0, 1)          # prior detection
-  gamma[1,1] <- phi      # Pr(alive t -> alive t+1)
-  gamma[1,2] <- 1 - phi  # Pr(alive t -> dead t+1)
-  gamma[2,1] <- 0           # Pr(dead t -> alive t+1)
-  gamma[2,2] <- 1           # Pr(dead t -> dead t+1)
-  
-  
-  # priors
-  mup ~ dnorm(0, sd= 1.5) # prior intercept on the logit scale
-  sdeps_p ~ dunif(0,10) # prior standard deviation for the random effect
-  # likelihood
-  for (i in 1:N){
-    z[i,first[i]] ~ dcat(delta[1:2])
-    for (j in (first[i]+1):T){
-      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2])
-      y[i,j] ~ dcat(omega[z[i,j], 1:2, j-1])
+  phi ~ dunif(0, 1)
+  gamma[1, 1] <- phi
+  gamma[1, 2] <- 1 - phi
+  gamma[2, 1] <- 0
+  gamma[2, 2] <- 1
+
+  mup ~ dnorm(0, sd = 1.5)
+  sdeps_p ~ dunif(0, 10)
+  for (i in 1:N) {
+    z[i, first[i]] ~ dcat(delta[1:2])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, j - 1])
     }
   }
 })
@@ -266,9 +263,9 @@ Initial values of the four Markov Chains :
 ```{r}
 makeinits <- function() {
   list(
-    mup = rnorm(1,0,1),
-    sdeps_p = runif(1,0,3),
-    phi = runif(1,0,1),
+    mup = rnorm(1, 0, 1),
+    sdeps_p = runif(1, 0, 3),
+    phi = runif(1, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -279,11 +276,7 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 Parameters to monitor :
 
 ```{r}
-params <- c(
-  "mup",
-  "sdeps_p",
-  "phi"
-)
+params <- c("mup", "sdeps_p", "phi")
 ```
 
 Running the MCMC :
@@ -305,7 +298,9 @@ mcmc_p.timeRE_phi. <- nimbleMCMC(
 ```
 
 ```{r}
-hmm.p.timeRE_phi.$WAIC
+#| eval: true
+
+mcmc_p.timeRE_phi.$WAIC
 ```
 
 ## Model 3
@@ -321,29 +316,28 @@ Model code :
 
 ```{r}
 hmm.p.timeCAT_phi. <- nimbleCode({
-  delta[1] <- 1          
-  delta[2] <- 0 
-  
-  for(t in 1:(T-1)){
-    p[t] ~ dunif(0,1)
-    omega[1,1,t] <- 1 - p[t]
-    omega[1,2,t] <- p[t]
-    omega[2,1,t] <- 1
-    omega[2,2,t] <- 0
+  delta[1] <- 1
+  delta[2] <- 0
+
+  for (t in 1:(T - 1)) {
+    p[t] ~ dunif(0, 1)
+    omega[1, 1, t] <- 1 - p[t]
+    omega[1, 2, t] <- p[t]
+    omega[2, 1, t] <- 1
+    omega[2, 2, t] <- 0
   }
-  
-  phi ~ dunif(0, 1) 
-  gamma[1,1] <- phi      
-  gamma[1,2] <- 1 - phi  
-  gamma[2,1] <- 0           
-  gamma[2,2] <- 1           
-  
-  
-  for(i in 1:N){
+
+  phi ~ dunif(0, 1)
+  gamma[1, 1] <- phi
+  gamma[1, 2] <- 1 - phi
+  gamma[2, 1] <- 0
+  gamma[2, 2] <- 1
+
+  for (i in 1:N) {
     z[i, first[i]] ~ dcat(delta[1:2])
-    for(j in (first[i]+1):T){
-      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2])
-      y[i,j] ~ dcat(omega[z[i,j], 1:2,j-1])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, j - 1])
     }
   }
 })
@@ -360,8 +354,8 @@ Initial values of the four Markov Chains :
 ```{r}
 makeinits <- function() {
   list(
-    p = runif((T-1),0,1),
-    phi = runif(1,0,1),
+    p = runif((T - 1), 0, 1),
+    phi = runif(1, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -372,10 +366,7 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 Parameters to monitor :
 
 ```{r}
-params <- c(
-  "p",
-  "phi"
-)
+params <- c("p", "phi")
 ```
 
 Running the MCMC :
@@ -397,6 +388,8 @@ mcmc_p.timeCAT_phi. <- nimbleMCMC(
 ```
 
 ```{r}
+#| eval: true
+
 mcmc_p.timeCAT_phi.$WAIC
 ```
 
@@ -413,31 +406,31 @@ Model code :
 
 ```{r}
 hmm.p.sex_phi. <- nimbleCode({
-  delta[1] <- 1          
-  delta[2] <- 0 
-  
-  for(k in 1:K){
-    p[k] ~ dunif(0,1)
-  }
-  
-  for(i in 1:N){
-    omega[1,1,i] <- 1 - p[SEX[i]]
-    omega[1,2,i] <- p[SEX[i]]
-    omega[2,1,i] <- 1
-    omega[2,2,i] <- 0
+  delta[1] <- 1
+  delta[2] <- 0
+
+  for (k in 1:K) {
+    p[k] ~ dunif(0, 1)
   }
 
-  phi ~ dunif(0, 1)          # prior detection
-  gamma[1,1] <- phi      # Pr(alive t -> alive t+1)
-  gamma[1,2] <- 1 - phi  # Pr(alive t -> dead t+1)
-  gamma[2,1] <- 0           # Pr(dead t -> alive t+1)
-  gamma[2,2] <- 1           # Pr(dead t -> dead t+1)
-  
-  for(i in 1:N){
+  for (i in 1:N) {
+    omega[1, 1, i] <- 1 - p[SEX[i]]
+    omega[1, 2, i] <- p[SEX[i]]
+    omega[2, 1, i] <- 1
+    omega[2, 2, i] <- 0
+  }
+
+  phi ~ dunif(0, 1)
+  gamma[1, 1] <- phi
+  gamma[1, 2] <- 1 - phi
+  gamma[2, 1] <- 0
+  gamma[2, 2] <- 1
+
+  for (i in 1:N) {
     z[i, first[i]] ~ dcat(delta[1:2])
-    for(j in (first[i]+1):T){
-      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2])
-      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
     }
   }
 })
@@ -454,8 +447,8 @@ Initial values of the four Markov Chains :
 ```{r}
 makeinits <- function() {
   list(
-    p = runif(K,0,1),
-    phi = runif(1,0,1),
+    p = runif(K, 0, 1),
+    phi = runif(1, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -466,10 +459,7 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 Parameters to monitor :
 
 ```{r}
-params <- c(
-  "p",
-  "phi"
-)
+params <- c("p", "phi")
 ```
 
 Running the MCMC :
@@ -491,6 +481,8 @@ mcmc_p.sex_phi. <- nimbleMCMC(
 ```
 
 ```{r}
+#| eval: true
+
 mcmc_p.sex_phi.$WAIC
 ```
 
@@ -507,18 +499,11 @@ Model code :
 
 ```{r}
 hmm.p.sex_phi.timeRE <- nimbleCode({
-  delta[1] <- 1          
-  delta[2] <- 0 
-  
-  for(k in 1:K){
-    p[k] ~ dunif(0,1)
-  }
-  
-  for(i in 1:N){
-    omega[1,1,i] <- 1 - p[SEX[i]]
-    omega[1,2,i] <- p[SEX[i]]
-    omega[2,1,i] <- 1
-    omega[2,2,i] <- 0
+  delta[1] <- 1
+  delta[2] <- 0
+
+  for (k in 1:K) {
+    p[k] ~ dunif(0, 1)
   }
   
   for (t in 1:(T-1)){
@@ -529,15 +514,24 @@ hmm.p.sex_phi.timeRE <- nimbleCode({
     gamma[2,1,t] <- 0           # Pr(dead t -> alive t+1)
     gamma[2,2,t] <- 1           # Pr(dead t -> dead t+1)
   }
-  
+
+  for (t in 1:(T - 1)) {
+    logit(phi[t]) <- muphi + eps_phi[t]
+    eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
+    gamma[1, 1, t] <- phi[t]
+    gamma[1, 2, t] <- 1 - phi[t]
+    gamma[2, 1, t] <- 0
+    gamma[2, 2, t] <- 1
+  }
+
   muphi ~ dnorm(0, sd = 1.5)
   sdeps_phi ~ dunif(0, 10)
-  
-  for(i in 1:N){
+
+  for (i in 1:N) {
     z[i, first[i]] ~ dcat(delta[1:2])
-    for(j in (first[i]+1):T){
-      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,j-1])
-      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, j - 1])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
     }
   }
 })
@@ -554,9 +548,9 @@ Initial values of the four Markov Chains :
 ```{r}
 makeinits <- function() {
   list(
-    p = runif(K,0,1),
-    muphi = rnorm(1,0,1),
-    sdeps_phi = runif(1,0,3),
+    p = runif(K, 0, 1),
+    muphi = rnorm(1, 0, 1),
+    sdeps_phi = runif(1, 0, 3),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -589,6 +583,8 @@ mcmc_p.sex_phi.timeRE <- nimbleMCMC(
 ```
 
 ```{r}
+#| eval: true
+
 mcmc_p.sex_phi.timeRE$WAIC
 ```
 
@@ -605,18 +601,11 @@ Model code :
 
 ```{r}
 hmm.p.sex_phi.timeCAT <- nimbleCode({
-  delta[1] <- 1          
-  delta[2] <- 0 
-  
-  for(k in 1:K){
-    p[k] ~ dunif(0,1)
-  }
-  
-  for(i in 1:N){
-    omega[1,1,i] <- 1 - p[SEX[i]]
-    omega[1,2,i] <- p[SEX[i]]
-    omega[2,1,i] <- 1
-    omega[2,2,i] <- 0
+  delta[1] <- 1
+  delta[2] <- 0
+
+  for (k in 1:K) {
+    p[k] ~ dunif(0, 1)
   }
   
   for(t in 1:(T-1)){
@@ -627,12 +616,19 @@ hmm.p.sex_phi.timeCAT <- nimbleCode({
     gamma[2,2,t] <- 1
   }
 
-  
-  for(i in 1:N){
+  for (t in 1:(T - 1)) {
+    phi[t] ~ dunif(0, 1)
+    gamma[1, 1, t] <- phi[t]
+    gamma[1, 2, t] <- 1 - phi[t]
+    gamma[2, 1, t] <- 0
+    gamma[2, 2, t] <- 1
+  }
+
+  for (i in 1:N) {
     z[i, first[i]] ~ dcat(delta[1:2])
-    for(j in (first[i]+1):T){
-      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,j-1])
-      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, j - 1])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
     }
   }
 })
@@ -650,8 +646,8 @@ Initial values of the four Markov Chains :
 ```{r}
 makeinits <- function() {
   list(
-    p = runif(K,0,1),
-    phi = runif(T-1,0,1),
+    p = runif(K, 0, 1),
+    phi = runif(T - 1, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -684,6 +680,8 @@ mcmc_p.sex_phi.timeCAT <- nimbleMCMC(
 ```
 
 ```{r}
+#| eval: true
+
 mcmc_p.sex_phi.timeCAT$WAIC
 ```
 
@@ -700,35 +698,35 @@ Model code :
 
 ```{r}
 hmm.p.sex_phi.timeCONT <- nimbleCode({
-  delta[1] <- 1          
-  delta[2] <- 0 
-  
-  for(k in 1:K){
-    p[k] ~ dunif(0,1)
+  delta[1] <- 1
+  delta[2] <- 0
+
+  for (k in 1:K) {
+    p[k] ~ dunif(0, 1)
   }
-  
-  for(i in 1:N){
-    omega[1,1,i] <- 1 - p[SEX[i]]
-    omega[1,2,i] <- p[SEX[i]]
-    omega[2,1,i] <- 1
-    omega[2,2,i] <- 0
+
+  for (i in 1:N) {
+    omega[1, 1, i] <- 1 - p[SEX[i]]
+    omega[1, 2, i] <- p[SEX[i]]
+    omega[2, 1, i] <- 1
+    omega[2, 2, i] <- 0
   }
-  
-  for (t in 1:(T-1)){
-    logit(phi[t]) <- alpha_phi0 + beta_time*(TIME[t]-1)
-    gamma[1,1,t] <- phi[t]     # Pr(alive t -> alive t+1)
-    gamma[1,2,t] <- 1 - phi[t]  # Pr(alive t -> dead t+1)
-    gamma[2,1,t] <- 0           # Pr(dead t -> alive t+1)
-    gamma[2,2,t] <- 1           # Pr(dead t -> dead t+1)
+
+  for (t in 1:(T - 1)) {
+    logit(phi[t]) <- alpha_phi0 + beta_time * (TIME[t] - 1)
+    gamma[1, 1, t] <- phi[t]
+    gamma[1, 2, t] <- 1 - phi[t]
+    gamma[2, 1, t] <- 0
+    gamma[2, 2, t] <- 1
   }
-  alpha_phi0 ~ dnorm(0, sd = 1.5) # prior intercept
-  beta_time ~ dnorm(0, sd = 1.5) # prior slope
-  
-  for(i in 1:N){
+  alpha_phi0 ~ dnorm(0, sd = 1.5)
+  beta_time ~ dnorm(0, sd = 1.5)
+
+  for (i in 1:N) {
     z[i, first[i]] ~ dcat(delta[1:2])
-    for(j in (first[i]+1):T){
-      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,j-1])
-      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, j - 1])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
     }
   }
 })
@@ -745,9 +743,9 @@ Initial values of the four Markov Chains :
 ```{r}
 makeinits <- function() {
   list(
-    p = runif(K,0,1),
-    alpha_phi0 = rnorm(1,0,1),
-    beta_time = rnorm(1,0,1),
+    p = runif(K, 0, 1),
+    alpha_phi0 = rnorm(1, 0, 1),
+    beta_time = rnorm(1, 0, 1),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -780,6 +778,8 @@ mcmc_p.sex_phi.timeCONT <- nimbleMCMC(
 ```
 
 ```{r}
+#| eval: true
+
 mcmc_p.sex_phi.timeCONT$WAIC
 ```
 
@@ -794,13 +794,13 @@ Model code :
 
 ```{r}
 hmm.p.sex_phi.timeCAT.sex <- nimbleCode({
-  delta[1] <- 1          
+  delta[1] <- 1
   delta[2] <- 0
 
   alpha_phi0 ~ dnorm(0, sd = 1.5)
-  
+
   beta_phi_sex[1] <- 0
-  for (k in 2:K){
+  for (k in 2:K) {
     beta_phi_sex[k] ~ dnorm(0, sd = 1.5)
   }
 
@@ -808,33 +808,33 @@ hmm.p.sex_phi.timeCAT.sex <- nimbleCode({
   for (t in 2:(T - 1)) {
     beta_phi_time[t] ~ dnorm(0, sd = 1.5)
   }
-  
-  for(i in 1:N){
-    for(t in 1:(T-1)){
-      logit(phi[i,t]) <- alpha_phi0 + beta_phi_time[t] + beta_phi_sex[SEX[i]]
-      gamma[1,1,i,t] <- phi[i,t]
-      gamma[1,2,i,t] <- 1 - phi[i,t]
-      gamma[2,1,i,t] <- 0
-      gamma[2,2,i,t] <- 1
+
+  for (i in 1:N) {
+    for (t in 1:(T - 1)) {
+      logit(phi[i, t]) <- alpha_phi0 + beta_phi_time[t] + beta_phi_sex[SEX[i]]
+      gamma[1, 1, i, t] <- phi[i, t]
+      gamma[1, 2, i, t] <- 1 - phi[i, t]
+      gamma[2, 1, i, t] <- 0
+      gamma[2, 2, i, t] <- 1
     }
   }
-  
-  for(k in 1:K){
-    p[k] ~ dunif(0,1)
+
+  for (k in 1:K) {
+    p[k] ~ dunif(0, 1)
   }
-  
-  for(i in 1:N){
-    omega[1,1,i] <- 1 - p[SEX[i]]
-    omega[1,2,i] <- p[SEX[i]]
-    omega[2,1,i] <- 1
-    omega[2,2,i] <- 0
+
+  for (i in 1:N) {
+    omega[1, 1, i] <- 1 - p[SEX[i]]
+    omega[1, 2, i] <- p[SEX[i]]
+    omega[2, 1, i] <- 1
+    omega[2, 2, i] <- 0
   }
-  
-  for(i in 1:N){
+
+  for (i in 1:N) {
     z[i, first[i]] ~ dcat(delta[1:2])
-    for(j in (first[i]+1):T){
-      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,i,j-1])
-      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
+    for (j in (first[i] + 1):T) {
+      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i, j - 1])
+      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
     }
   }
 })
@@ -851,11 +851,11 @@ Initial values of the four Markov Chains :
 ```{r}
 makeinits <- function() {
   list(
-    p   = runif(K,0,1),
+    p = runif(K, 0, 1),
     alpha_phi0 = rnorm(1, 0, sd = 1.5),
-    beta_phi_sex = c(0, rnorm(K-1,0,1.5)),
+    beta_phi_sex = c(0, rnorm(K - 1, 0, 1.5)),
     beta_phi_time = c(0, rnorm(T - 2, 0, sd = 1.5)),
-    z   = t(apply(y, 1, zinits))
+    z = t(apply(y, 1, zinits))
   )
 }
 
@@ -887,6 +887,8 @@ mcmc_p.sex_phi.timeCAT.sex <- nimbleMCMC(
 ```
 
 ```{r}
+#| eval: true
+
 mcmc_p.sex_phi.timeCAT.sex$WAIC
 ```
 
@@ -902,13 +904,31 @@ mcmc_p.sex_phi.timeCAT.sex$WAIC
 |    5    |    cat     |  constant   |      cat      |       RE       |    533    |
 |    6    |    cat     |  constant   |      cat      |   continuous   |  **529\***|
 |    7    |    cat     |  constant   |      cat      |    constant    |    531    |
-|    8    |    cat     |  constant   |   constant    |       RE       |    535    |
+|    8    |    cat     |  constant   |   constant    |       RE       |    531    |
 
 cat = categorical ; RE = random effect
 
 **\***Best model
 
 We selected **model 6** for subsequent analyses.
+
+## Output of best model
+
+```{r}
+#| eval: true
+MCMCtrace(
+  object = mcmc_p.sex_phi.timeCAT$samples,
+  pdf = FALSE,
+  ind = TRUE,
+  params = c('p', 'phi')
+)
+```
+
+```{r}
+#| eval: true
+
+MCMCsummary(mcmc_p.sex_phi.timeCAT$samples)
+```
 
 # 2. Effect of oxychlordane (OXY)
 
@@ -1029,10 +1049,10 @@ hmm.p.sex_phi.timeCAT.oxyCONT <- nimbleCode({
 my.constants <- list(
   N = N,
   T = T,
-  sex = SEX,
+  SEX = SEX,
   K = K,
   first = first,
-  oxy = log_oxy_sc
+  OXY = log_oxy_sc
 )
 ```
 
@@ -1056,7 +1076,7 @@ params = c("p", "alpha_phi0", "beta_oxy", "beta_time")
 
 ```{r}
 mcmc_p.sex_phi.timeCAT.oxyCONT <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeRE.oxyCONT,
+  code = hmm.p.sex_phi.timeCAT.oxyCONT,
   constants = my.constants,
   data = my.data,
   inits = initial.values,
@@ -1071,7 +1091,9 @@ mcmc_p.sex_phi.timeCAT.oxyCONT <- nimbleMCMC(
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE.oxyCONT$WAIC
+#| eval: true
+
+mcmc_p.sex_phi.timeCAT.oxyCONT$WAIC
 ```
 
 ### $log(OXY)$ as a categorical variable
@@ -1300,8 +1322,9 @@ mcmc_p.sex_phi.timeCAT.oxyCAT3D <- nimbleMCMC(
 ```
 
 ```{r}
-MCMCsummary(mcmc_4$samples, params = "beta")
-mcmc_4$WAIC
+#| eval: true
+
+mcmc_p.sex_phi.timeCAT.oxyCAT$WAIC
 ```
 
 
@@ -1317,7 +1340,7 @@ G <- length(unique(oxyd_2D))
 constants <- list(
   N = N,
   T = T,
-  sex = sex,
+  SEX = SEX,
   K = K,
   G = G,
   first = first,
@@ -1331,7 +1354,7 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 
 ```{r}
 mcmc_p.sex_phi.timeCAT.oxyCAT2D <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeRE.oxyCAT2D,
+  code = hmm.p.sex_phi.timeCAT.oxyCAT,
   constants = constants,
   data = my.data,
   inits = initial.values,
@@ -1339,14 +1362,16 @@ mcmc_p.sex_phi.timeCAT.oxyCAT2D <- nimbleMCMC(
   niter = n_iter,
   nburnin = n_burnin,
   nchains = n_chains,
-  setSeed = chain_seed,
+  setSeed = chain_seeds,
   summary = TRUE,
   WAIC = TRUE
 )
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE.oxyCAT2D$WAIC
+#| eval: true
+
+mcmc_p.sex_phi.timeCAT.oxyCAT2D$WAIC
 ```
 
 ### $log(OXY)$ as a pooled categorical variable (except last three deciles)
@@ -1360,7 +1385,7 @@ G <- length(unique(oxyd_3D))
 constants <- list(
   N = N,
   T = T,
-  sex = SEX,
+  SEX = SEX,
   K = K,
   G = G,
   first = first,
@@ -1374,7 +1399,7 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 
 ```{r}
 mcmc_p.sex_phi.timeCAT.oxyCAT3D <- nimbleMCMC(
-  code = model_oxy_cat,
+  code = hmm.p.sex_phi.timeCAT.oxyCAT,
   constants = constants,
   data = my.data, ####################################################
   inits = initial.values,
@@ -1389,8 +1414,9 @@ mcmc_p.sex_phi.timeCAT.oxyCAT3D <- nimbleMCMC(
 ```
 
 ```{r}
-MCMCsummary(mcmc_4$samples, params = "beta")
-mcmc_4$WAIC
+#| eval: true
+
+mcmc_p.sex_phi.timeCAT.oxyCAT3D$WAIC
 ```
 
 ### $log(OXY)$ as a pooled categorical variable (except last two or three deciles depending on sex)
@@ -1456,7 +1482,7 @@ hmm.p.sex_phi.timeRE.oxyCAT_2DF3DM <- nimbleCode({
 constants <- list(
   N = N,
   T = T,
-  sex = sex,
+  SEX = SEX,
   K = K,
   G = G,
   first = first,
@@ -1466,13 +1492,13 @@ constants <- list(
 
 ```{r}
 makeinits <- function() {
-  B <- matrix(rnorm(20, 0, 1), nrow=K, ncol=G)
-  B[1,1] <- 0
-  
+  B <- matrix(rnorm(8, 0, 1), nrow = K, ncol = G)
+  B[1, 1] <- 0
+
   list(
     p = runif(K, 0, 1),
     alpha_phi0 = rnorm(1, 0, 1),
-    beta_time = c(0, rnorm(T-2, 0, 1.5)),
+    beta_time = c(0, rnorm(T - 2, 0, 1.5)),
     beta_oxy = B,
     z = t(apply(y, 1, zinits))
   )
@@ -1482,8 +1508,8 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE.oxyCAT_2DF3DM  <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeRE.oxyCAT_2DF3DM,
+mcmc_p.sex_phi.timeCAT.oxyCAT_2DF3DM  <- nimbleMCMC(
+  code = hmm.p.sex_phi.timeCAT.oxyCAT_2DF3DM,
   constants = constants,
   data = my.data,
   inits = initial.values,
@@ -1498,5 +1524,7 @@ mcmc_p.sex_phi.timeRE.oxyCAT_2DF3DM  <- nimbleMCMC(
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE.oxyCAT_2DF3DM$WAIC
+#| eval: true
+
+mcmc_p.sex_phi.timeCAT.oxyCAT_2DF3DM$WAIC
 ```

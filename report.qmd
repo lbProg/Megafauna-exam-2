@@ -9,7 +9,6 @@ knitr:
     opts_chunk:
         message: FALSE
         warning: FALSE
-        eval: FALSE
 embed-resources: TRUE
 lightbox: TRUE
 toc: TRUE
@@ -506,12 +505,14 @@ hmm.p.sex_phi.timeRE <- nimbleCode({
   for (k in 1:K) {
     p[k] ~ dunif(0, 1)
   }
-
-  for (i in 1:N) {
-    omega[1, 1, i] <- 1 - p[SEX[i]]
-    omega[1, 2, i] <- p[SEX[i]]
-    omega[2, 1, i] <- 1
-    omega[2, 2, i] <- 0
+  
+  for (t in 1:(T-1)){
+    logit(phi[t]) <- muphi + eps_phi[t] # eps is the random effect (epsilon)
+    eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
+    gamma[1,1,t] <- phi[t]      # Pr(alive t -> alive t+1)
+    gamma[1,2,t] <- 1 - phi[t]  # Pr(alive t -> dead t+1)
+    gamma[2,1,t] <- 0           # Pr(dead t -> alive t+1)
+    gamma[2,2,t] <- 1           # Pr(dead t -> dead t+1)
   }
 
   for (t in 1:(T - 1)) {
@@ -606,12 +607,13 @@ hmm.p.sex_phi.timeCAT <- nimbleCode({
   for (k in 1:K) {
     p[k] ~ dunif(0, 1)
   }
-
-  for (i in 1:N) {
-    omega[1, 1, i] <- 1 - p[SEX[i]]
-    omega[1, 2, i] <- p[SEX[i]]
-    omega[2, 1, i] <- 1
-    omega[2, 2, i] <- 0
+  
+  for(t in 1:(T-1)){
+    phi[t] ~ dunif(0,1)   # un p par année
+    gamma[1,1,t] <- phi[t]
+    gamma[1,2,t] <- 1 - phi[t]
+    gamma[2,1,t] <- 0
+    gamma[2,2,t] <- 1
   }
 
   for (t in 1:(T - 1)) {
@@ -955,22 +957,26 @@ oxyd <- log_oxy |>
 Pool all deciles except the last n :
 
 ```{r}
+
 pool_n <- function(data, sex, n_female, n_male) {
-  levels_d <- sort(unique(data))
+  levels <- sort(unique(data))
+  topD_f <- tail(levels, n_female)
+  topD_m <- tail(levels, n_male)
 
-  unique_d_female <- tail(levels_d, n_female)
-  unique_d_male <- tail(levels_d, n_male)
+  groups <- data
 
-  # 1 is male and 2 is female
-  data[sex == 2 & !(data %in% unique_d_female)] <- 1
-  data[sex == 1 & !(data %in% unique_d_male)] <- 1
+  groups[sex == 2 &  (data %in% topD_f)] <- max(levels)
+  groups[sex == 2 & !(data %in% topD_f)] <- 1
+  groups[sex == 1 &  (data %in% topD_m)] <- max(levels)
+  groups[sex == 1 & !(data %in% topD_m)] <- 1
 
-  match(data, levels(factor(data)))
+  match(groups, sort(unique(groups)))
 }
+
 ```
 
 ```{r}
-data.frame(x = oxyd, SEX = raw_data$sex, y = pool_n(oxyd, raw_data$sex, 2, 3))
+data.frame(x = oxyd, SEX = raw_data$sex, y = pool_n(oxyd, raw_data$sex, n_female = 1, n_male = 2))
 ```
 
 ## Model selection strategy
@@ -999,41 +1005,41 @@ G <- length(unique(oxyd))
 
 ```{r}
 hmm.p.sex_phi.timeCAT.oxyCONT <- nimbleCode({
-  delta[1] <- 1
-  delta[2] <- 0
-
-  for (k in 1:K) {
-    p[k] ~ dunif(0, 1)
+  delta[1] <- 1          
+  delta[2] <- 0 
+  
+  for(k in 1:K){
+    p[k] ~ dunif(0,1)
   }
-
-  for (i in 1:N) {
-    omega[1, 1, i] <- 1 - p[SEX[i]]
-    omega[1, 2, i] <- p[SEX[i]]
-    omega[2, 1, i] <- 1
-    omega[2, 2, i] <- 0
+  
+  for(i in 1:N){
+    omega[1,1,i] <- 1 - p[SEX[i]]
+    omega[1,2,i] <- p[SEX[i]]
+    omega[2,1,i] <- 1
+    omega[2,2,i] <- 0
   }
-
+  
   beta_time[1] <- 0
-  for (t in 2:(T - 1)) {
+  for(t in 2:(T-1)){
     beta_time[t] ~ dnorm(0, sd = 1.5)
   }
-
-  for (t in 1:(T - 1)) {
+  
+  for (t in 1:(T-1)){
     logit(phi[t]) <- alpha_phi0 + beta_oxy * OXY[t] + beta_time[t]
-    gamma[1, 1, t] <- phi[t]
-    gamma[1, 2, t] <- 1 - phi[t]
-    gamma[2, 1, t] <- 0
-    gamma[2, 2, t] <- 1
+    gamma[1,1,t] <- phi[t]      # Pr(alive t -> alive t+1)
+    gamma[1,2,t] <- 1 - phi[t]  # Pr(alive t -> dead t+1)
+    gamma[2,1,t] <- 0           # Pr(dead t -> alive t+1)
+    gamma[2,2,t] <- 1           # Pr(dead t -> dead t+1)
   }
-
+  
   alpha_phi0 ~ dnorm(0, sd = 1.5)
-  beta_oxy ~ dnorm(0, sd = 1.5)
-
-  for (i in 1:N) {
+  beta_oxy   ~ dnorm(0, sd = 1.5) 
+  
+  for(i in 1:N){
     z[i, first[i]] ~ dcat(delta[1:2])
-    for (j in (first[i] + 1):T) {
-      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, j - 1])
-      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
+    for(j in (first[i]+1):T){
+      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,j-1])
+      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
     }
   }
 })
@@ -1053,10 +1059,10 @@ my.constants <- list(
 ```{r}
 makeinits <- function() {
   list(
-    p = runif(K, 0, 1),
-    alpha_phi0 = rnorm(1, 0, 1),
-    beta_oxy = rnorm(1, 0, 1),
-    beta_time = c(0, rnorm(T - 2, 0, 1.5)),
+    p = runif(K,0,1),
+    alpha_phi0 = rnorm(1,0,1),
+    beta_oxy = rnorm(1,0,1),
+    beta_time = c(0, rnorm(T-2,0,1.5)),
     z = t(apply(y, 1, zinits))
   )
 }
@@ -1094,50 +1100,111 @@ mcmc_p.sex_phi.timeCAT.oxyCONT$WAIC
 
 ```{r}
 hmm.p.sex_phi.timeCAT.oxyCAT <- nimbleCode({
-  delta[1] <- 1
-  delta[2] <- 0
-
-  for (k in 1:K) {
-    p[k] ~ dunif(0, 1)
+  delta[1] <- 1          
+  delta[2] <- 0 
+  
+  for(k in 1:K){
+    p[k] ~ dunif(0,1)
   }
-
-  for (i in 1:N) {
-    omega[1, 1, i] <- 1 - p[SEX[i]]
-    omega[1, 2, i] <- p[SEX[i]]
-    omega[2, 1, i] <- 1
-    omega[2, 2, i] <- 0
+  
+  for(i in 1:N){
+    omega[1,1,i] <- 1 - p[SEX[i]]
+    omega[1,2,i] <- p[SEX[i]]
+    omega[2,1,i] <- 1
+    omega[2,2,i] <- 0
   }
-
+  
   beta_time[1] <- 0
-  for (t in 2:(T - 1)) {
+  for(t in 2:(T-1)){
     beta_time[t] ~ dnorm(0, sd = 1.5)
   }
-
+  
   beta_oxy[1] <- 0
-  for (g in 2:G) {
+  for(g in 2:G){
     beta_oxy[g] ~ dnorm(0, sd = 1.5)
   }
-
-  for (i in 1:N) {
-    for (t in 1:(T - 1)) {
-      logit(phi[i, t]) <- alpha_phi0 + beta_oxy[oxyd[i]] + beta_time[t]
-      gamma[1, 1, i, t] <- phi[i, t]
-      gamma[1, 2, i, t] <- 1 - phi[i, t]
-      gamma[2, 1, i, t] <- 0
-      gamma[2, 2, i, t] <- 1
+  
+  for(g in 1:G){
+    for (t in 1:(T-1)){
+      logit(phi[g,t]) <- alpha_phi0 + beta_oxy[g] + beta_time[t]
+    }
+  }
+  
+  for(i in 1:N){
+    for(t in 1:(T-1)){
+      gamma[1,1,i,t] <- phi[oxyd[i],t]      # Pr(alive t -> alive t+1)
+      gamma[1,2,i,t] <- 1 - phi[oxyd[i],t]  # Pr(alive t -> dead t+1)
+      gamma[2,1,i,t] <- 0           # Pr(dead t -> alive t+1)
+      gamma[2,2,i,t] <- 1           # Pr(dead t -> dead t+1)
     }
   }
 
+  
   alpha_phi0 ~ dnorm(0, sd = 1.5)
-
-  for (i in 1:N) {
+  
+  for(i in 1:N){
     z[i, first[i]] ~ dcat(delta[1:2])
-    for (j in (first[i] + 1):T) {
-      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i, j - 1])
-      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
+    for(j in (first[i]+1):T){
+      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,i,j-1])
+      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
     }
   }
 })
+```
+
+```{r}
+my.constants <- list(N = N,
+                     T = T,
+                     first = first,
+                     SEX = SEX,
+                     K = K,
+                     oxyd = oxyd,
+                     G = G)
+```
+
+```{r}
+makeinits <- function() {
+  list(
+    p = runif(K,0,1),
+    alpha_phi0 = rnorm(1,0,1),
+    beta_oxy = c(0, rnorm(G-1,0,1)),
+    beta_time = c(0, rnorm(T-2,0,1.5)),
+    z = t(apply(y, 1, zinits))
+  )
+}
+
+initial.values <- replicate(4, makeinits(), simplify = FALSE)
+```
+
+```{r}
+params <- c("p", "phi","alpha_phi0", "beta_oxy", "beta_time")
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCAT <- nimbleMCMC(
+  code = hmm.p.sex_phi.timeCAT.oxyCAT,
+  constants = my.constants,
+  data = my.data,
+  inits = initial.values,
+  monitors = params,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  setSeed = chain_seeds,
+  summary = TRUE,
+  WAIC = TRUE
+)
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCAT$WAIC
+```
+
+### $log(OXY)$ as a pooled categorical variable (9 first deciles)
+
+```{r}
+oxyd_D9 <- pool_n(oxyd, raw_data$sex, 1, 1)
+G <- length(unique(oxyd_D9))
 ```
 
 ```{r}
@@ -1148,33 +1215,101 @@ constants <- list(
   K = K,
   G = G,
   first = first,
-  oxyd = oxyd
+  oxyd = oxyd_D9
 )
 ```
 
 ```{r}
-makeinits <- function() {
-  list(
-    p = runif(K, 0, 1),
-    alpha_phi0 = rnorm(1, 0, 1),
-    beta_oxy = c(0, rnorm(G - 1, 0, 1)),
-    beta_time = c(0, rnorm(T - 2, 0, 1.5)),
-    z = t(apply(y, 1, zinits))
-  )
-}
-
 initial.values <- replicate(4, makeinits(), simplify = FALSE)
 ```
 
 ```{r}
-monitor = c("p", "alpha_phi0", "beta_oxy", "beta_time")
-```
-
-```{r}
-mcmc_p.sex_phi.timeCAT.oxyCAT <- nimbleMCMC(
+mcmc_p.sex_phi.timeCAT.oxyCATD9 <- nimbleMCMC(
   code = hmm.p.sex_phi.timeCAT.oxyCAT,
   constants = constants,
   data = my.data,
+  inits = initial.values,
+  monitors = params,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  setSeed = chain_seeds,
+  summary = TRUE,
+  WAIC = TRUE
+)
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCATD9$WAIC
+```
+
+### $log(OXY)$ as a pooled categorical variable (8 first deciles)
+
+```{r}
+oxyd_D9 <- pool_n(oxyd, raw_data$sex, 1, 1)
+G <- length(unique(oxyd_D9))
+```
+
+```{r}
+constants <- list(
+  N = N,
+  T = T,
+  SEX = SEX,
+  K = K,
+  G = G,
+  first = first,
+  oxyd = oxyd_D9
+)
+```
+
+```{r}
+initial.values <- replicate(4, makeinits(), simplify = FALSE)
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCATD9 <- nimbleMCMC(
+  code = hmm.p.sex_phi.timeCAT.oxyCAT,
+  constants = constants,
+  data = my.data,
+  inits = initial.values,
+  monitors = params,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  setSeed = chain_seeds,
+  summary = TRUE,
+  WAIC = TRUE
+)
+```
+
+### $log(OXY)$ as a pooled categorical variable (except last three deciles)
+
+```{r}
+oxyd_3D <- pool_n(oxyd, raw_data$sex, 3, 3)
+G <- length(unique(oxyd_3D))
+```
+
+```{r}
+constants <- list(
+  N = N,
+  T = T,
+  sex = SEX,
+  K = K,
+  G = G,
+  first = first,
+  oxyd = oxyd_3D
+)
+```
+
+```{r}
+initial.values <- replicate(4, makeinits(), simplify = FALSE)
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCAT3D <- nimbleMCMC(
+  code = model_oxy_cat,
+  constants = constants,
+  data = my.data, ####################################################
   inits = initial.values,
   monitors = params,
   niter = n_iter,
@@ -1191,6 +1326,8 @@ mcmc_p.sex_phi.timeCAT.oxyCAT <- nimbleMCMC(
 
 mcmc_p.sex_phi.timeCAT.oxyCAT$WAIC
 ```
+
+
 
 ### $log(OXY)$ as a pooled categorical variable (except last two deciles)
 
@@ -1264,7 +1401,7 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 mcmc_p.sex_phi.timeCAT.oxyCAT3D <- nimbleMCMC(
   code = hmm.p.sex_phi.timeCAT.oxyCAT,
   constants = constants,
-  data = my.data,
+  data = my.data, ####################################################
   inits = initial.values,
   monitors = params,
   niter = n_iter,
@@ -1290,52 +1427,52 @@ G <- length(unique(oxyd_mf))
 ```
 
 ```{r}
-hmm.p.sex_phi.timeCAT.oxyCAT_2DF3DM <- nimbleCode({
-  delta[1] <- 1
-  delta[2] <- 0
-
-  for (k in 1:K) {
-    p[k] ~ dunif(0, 1)
+hmm.p.sex_phi.timeRE.oxyCAT_2DF3DM <- nimbleCode({
+  delta[1] <- 1          
+  delta[2] <- 0 
+  
+  for(k in 1:K){
+    p[k] ~ dunif(0,1)
   }
-
-  for (i in 1:N) {
-    omega[1, 1, i] <- 1 - p[SEX[i]]
-    omega[1, 2, i] <- p[SEX[i]]
-    omega[2, 1, i] <- 1
-    omega[2, 2, i] <- 0
+  
+  for(i in 1:N){
+    omega[1,1,i] <- 1 - p[SEX[i]]
+    omega[1,2,i] <- p[SEX[i]]
+    omega[2,1,i] <- 1
+    omega[2,2,i] <- 0
   }
-
+  
   beta_time[1] <- 0
-  for (t in 2:(T - 1)) {
+  for(t in 2:(T-1)){
     beta_time[t] ~ dnorm(0, sd = 1.5)
   }
-
-  beta_oxy[1, 1] <- 0
-  for (g in 2:G) {
-    beta_oxy[1, g] ~ dnorm(0, sd = 1.5)
+  
+  beta_oxy[1,1] <- 0
+  for(g in 2:G){
+    beta_oxy[1,g] ~ dnorm(0, sd = 1.5)
   }
-
-  for (g in 1:G) {
-    beta_oxy[2, g] ~ dnorm(0, sd = 1.5)
+  
+  for(g in 1:G){
+    beta_oxy[2,g] ~ dnorm(0, sd = 1.5)
   }
-
-  for (i in 1:N) {
-    for (t in 1:(T - 1)) {
-      logit(phi[i, t]) <- alpha_phi0 + beta_oxy[SEX[i], oxyd[i]] + beta_time[t]
-      gamma[1, 1, i, t] <- phi[i, t]
-      gamma[1, 2, i, t] <- 1 - phi[i, t]
-      gamma[2, 1, i, t] <- 0
-      gamma[2, 2, i, t] <- 1
+  
+  for(i in 1:N){
+    for (t in 1:(T-1)){
+      logit(phi[i,t]) <- alpha_phi0 + beta_oxy[SEX[i], oxyd[i]] + beta_time[t]
+      gamma[1,1,i,t] <- phi[i,t]      # Pr(alive t -> alive t+1)
+      gamma[1,2,i,t] <- 1 - phi[i,t]  # Pr(alive t -> dead t+1)
+      gamma[2,1,i,t] <- 0           # Pr(dead t -> alive t+1)
+      gamma[2,2,i,t] <- 1           # Pr(dead t -> dead t+1)
     }
   }
-
+  
   alpha_phi0 ~ dnorm(0, sd = 1.5)
-
-  for (i in 1:N) {
+  
+  for(i in 1:N){
     z[i, first[i]] ~ dcat(delta[1:2])
-    for (j in (first[i] + 1):T) {
-      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, i, j - 1])
-      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
+    for(j in (first[i]+1):T){
+      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,i,j-1])
+      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
     }
   }
 })

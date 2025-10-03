@@ -1218,7 +1218,46 @@ mcmc_p.sex_phi.timeCAT.oxyCATD9 <- nimbleMCMC(
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeRE.oxyCAT2D$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCATD9$WAIC
+```
+
+### $log(OXY)$ as a pooled categorical variable (8 first deciles)
+
+```{r}
+oxyd_D9 <- pool_n(oxyd, raw_data$sex, 1, 1)
+G <- length(unique(oxyd_D9))
+```
+
+```{r}
+constants <- list(
+  N = N,
+  T = T,
+  SEX = SEX,
+  K = K,
+  G = G,
+  first = first,
+  oxyd = oxyd_D9
+)
+```
+
+```{r}
+initial.values <- replicate(4, makeinits(), simplify = FALSE)
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCATD9 <- nimbleMCMC(
+  code = hmm.p.sex_phi.timeCAT.oxyCAT,
+  constants = constants,
+  data = my.data,
+  inits = initial.values,
+  monitors = params,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  setSeed = chain_seeds,
+  summary = TRUE,
+  WAIC = TRUE
+)
 ```
 
 ### $log(OXY)$ as a pooled categorical variable (except last three deciles)

@@ -113,14 +113,14 @@ n_thin <- 1
 
 Selecting a model where survival probabliity and detection probability depend on time and sex. We will compare WAIC values to select the best model.
 
-From the most complex model to the most simple.
+From the most simple model to the most complex.
 
 ## Model 1
 
-|      | $p$         | $\phi$      |
-|------|-------------|-------------|
-| Time | constant    | constant    |
-| Sex  | constant    | constant    |
+|      | $p$      | $\phi$   |
+|------|----------|----------|
+| Time | constant | constant |
+| Sex  | constant | constant |
 
 $p$ : Detectability could vary among years, depending on weather or the effort for example. Here, treating time as a categorical covariate rather than a continuous one allows a non-linear trend. It could also differ between sexes due to differences in their behavior.
 
@@ -207,14 +207,15 @@ mcmc_p._phi. <- nimbleMCMC(
 #| eval: true
 
 mcmc_p._phi.$WAIC
+mcmc_p._phi.$summary
 ```
 
 ## Model 2
 
-|      | $p$           | $\phi$      |
-|------|---------------|-------------|
-| Time | random effect | constant    |
-| Sex  | constant      | constant    |
+|      | $p$           | $\phi$   |
+|------|---------------|----------|
+| Time | random effect | constant |
+| Sex  | constant      | constant |
 
 Detection is expected to fluctuate randomly among years due to variable field conditions.
 
@@ -301,14 +302,15 @@ mcmc_p.timeRE_phi. <- nimbleMCMC(
 #| eval: true
 
 mcmc_p.timeRE_phi.$WAIC
+mcmc_p.timeRE_phi.$summary
 ```
 
 ## Model 3
 
-|      | $p$         | $\phi$      |
-|------|-------------|-------------|
-| Time | categorical | constant    |
-| Sex  | constant    | constant    |
+|      | $p$         | $\phi$   |
+|------|-------------|----------|
+| Time | categorical | constant |
+| Sex  | constant    | constant |
 
 Detection could be stable accross years because of standardized protocols, same observer effort among years and site-fidelity of seabirds.
 
@@ -391,13 +393,18 @@ mcmc_p.timeCAT_phi. <- nimbleMCMC(
 #| eval: true
 
 mcmc_p.timeCAT_phi.$WAIC
+mcmc_p.timeCAT_phi.$summary
 ```
+
+When examining the time-dependent parameter p, which was modeled as a categorical variable, we observed an apparent decline in detection probability over time (across the different categories). However, from a biological standpoint, we did not consider it particularly meaningful to model such a temporal decline.
+
+The best model for time-dependent p was **model 1**, so we used this model as the basis for selecting the best model for p that also included sex.
 
 ## Model 4
 
-|      | $p$      | $\phi$      |
-|------|----------|-------------|
-| Time | constant | constant |
+|      | $p$         | $\phi$   |
+|------|-------------|----------|
+| Time | constant    | constant |
 | Sex  | categorical | constant |
 
 In colonial seabirds, males and females attend nests at overlapping times. Because both sexes are equally present, observers are not more likely to detect one sex over the other.
@@ -484,9 +491,10 @@ mcmc_p.sex_phi. <- nimbleMCMC(
 #| eval: true
 
 mcmc_p.sex_phi.$WAIC
+mcmc_p.sex_phi.$summary
 ```
 
-Since the best model for $p$ is **model 3** ($p$ depends only on sex as a categorical covariate), it was retained for selecting the best model for $\phi$.
+Since the best model for $p$ is **model 4** ($p$ depends only on sex as a categorical covariate), it was retained for selecting the best model for $\phi$.
 
 ## Model 5
 
@@ -499,11 +507,18 @@ Model code :
 
 ```{r}
 hmm.p.sex_phi.timeRE <- nimbleCode({
-  delta[1] <- 1
-  delta[2] <- 0
-
-  for (k in 1:K) {
-    p[k] ~ dunif(0, 1)
+  delta[1] <- 1          
+  delta[2] <- 0 
+  
+  for(k in 1:K){
+    p[k] ~ dunif(0,1)
+  }
+  
+  for(i in 1:N){
+    omega[1,1,i] <- 1 - p[SEX[i]]
+    omega[1,2,i] <- p[SEX[i]]
+    omega[2,1,i] <- 1
+    omega[2,2,i] <- 0
   }
   
   for (t in 1:(T-1)){
@@ -514,24 +529,15 @@ hmm.p.sex_phi.timeRE <- nimbleCode({
     gamma[2,1,t] <- 0           # Pr(dead t -> alive t+1)
     gamma[2,2,t] <- 1           # Pr(dead t -> dead t+1)
   }
-
-  for (t in 1:(T - 1)) {
-    logit(phi[t]) <- muphi + eps_phi[t]
-    eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
-    gamma[1, 1, t] <- phi[t]
-    gamma[1, 2, t] <- 1 - phi[t]
-    gamma[2, 1, t] <- 0
-    gamma[2, 2, t] <- 1
-  }
-
+  
   muphi ~ dnorm(0, sd = 1.5)
   sdeps_phi ~ dunif(0, 10)
-
-  for (i in 1:N) {
+  
+  for(i in 1:N){
     z[i, first[i]] ~ dcat(delta[1:2])
-    for (j in (first[i] + 1):T) {
-      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, j - 1])
-      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
+    for(j in (first[i]+1):T){
+      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,j-1])
+      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
     }
   }
 })
@@ -586,6 +592,7 @@ mcmc_p.sex_phi.timeRE <- nimbleMCMC(
 #| eval: true
 
 mcmc_p.sex_phi.timeRE$WAIC
+mcmc_p.sex_phi.timeRE$summary
 ```
 
 ## Model 6
@@ -601,11 +608,18 @@ Model code :
 
 ```{r}
 hmm.p.sex_phi.timeCAT <- nimbleCode({
-  delta[1] <- 1
-  delta[2] <- 0
-
-  for (k in 1:K) {
-    p[k] ~ dunif(0, 1)
+  delta[1] <- 1          
+  delta[2] <- 0 
+  
+  for(k in 1:K){
+    p[k] ~ dunif(0,1)
+  }
+  
+  for(i in 1:N){
+    omega[1,1,i] <- 1 - p[SEX[i]]
+    omega[1,2,i] <- p[SEX[i]]
+    omega[2,1,i] <- 1
+    omega[2,2,i] <- 0
   }
   
   for(t in 1:(T-1)){
@@ -616,19 +630,12 @@ hmm.p.sex_phi.timeCAT <- nimbleCode({
     gamma[2,2,t] <- 1
   }
 
-  for (t in 1:(T - 1)) {
-    phi[t] ~ dunif(0, 1)
-    gamma[1, 1, t] <- phi[t]
-    gamma[1, 2, t] <- 1 - phi[t]
-    gamma[2, 1, t] <- 0
-    gamma[2, 2, t] <- 1
-  }
-
-  for (i in 1:N) {
+  
+  for(i in 1:N){
     z[i, first[i]] ~ dcat(delta[1:2])
-    for (j in (first[i] + 1):T) {
-      z[i, j] ~ dcat(gamma[z[i, j - 1], 1:2, j - 1])
-      y[i, j] ~ dcat(omega[z[i, j], 1:2, i])
+    for(j in (first[i]+1):T){
+      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,j-1])
+      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
     }
   }
 })
@@ -638,7 +645,7 @@ hmm.p.sex_phi.timeCAT <- nimbleCode({
 Setting the constants :
 
 ```{r}
-my.constants <- list(N = N, T = T, first = first, SEX = SEX, K = K, TIME = TIME)
+my.constants <- list(N = N, T = T, first = first, SEX = SEX, K = K)
 ```
 
 Initial values of the four Markov Chains :
@@ -683,14 +690,15 @@ mcmc_p.sex_phi.timeCAT <- nimbleMCMC(
 #| eval: true
 
 mcmc_p.sex_phi.timeCAT$WAIC
+mcmc_p.sex_phi.timeCAT$summary
 ```
 
 ## Model 7
 
-|      | $p$         | $\phi$      |
-|------|-------------|-------------|
-| Time | constant    | continuous  |
-| Sex  | categorical | constant    |
+|      | $p$         | $\phi$     |
+|------|-------------|------------|
+| Time | constant    | continuous |
+| Sex  | categorical | constant   |
 
 Adult survival in long-lived species such as *Larus hyperboreus* can be buffered against short-term environmental fluctuations, so it can be considered as constant accoss years.
 
@@ -781,14 +789,15 @@ mcmc_p.sex_phi.timeCONT <- nimbleMCMC(
 #| eval: true
 
 mcmc_p.sex_phi.timeCONT$WAIC
+mcmc_p.sex_phi.timeCONT$summary
 ```
 
 ## Model 8
 
-|      | $p$         | $\phi$        |
-|------|-------------|---------------|
-| Time | constant    | categorical   |
-| Sex  | categorical | categorical   |
+|      | $p$         | $\phi$      |
+|------|-------------|-------------|
+| Time | constant    | categorical |
+| Sex  | categorical | categorical |
 
 Model code :
 
@@ -809,16 +818,22 @@ hmm.p.sex_phi.timeCAT.sex <- nimbleCode({
     beta_phi_time[t] ~ dnorm(0, sd = 1.5)
   }
 
-  for (i in 1:N) {
+  for (k in 1:K) {
     for (t in 1:(T - 1)) {
-      logit(phi[i, t]) <- alpha_phi0 + beta_phi_time[t] + beta_phi_sex[SEX[i]]
-      gamma[1, 1, i, t] <- phi[i, t]
-      gamma[1, 2, i, t] <- 1 - phi[i, t]
-      gamma[2, 1, i, t] <- 0
-      gamma[2, 2, i, t] <- 1
+      logit(phi[k, t]) <- alpha_phi0 + beta_phi_time[t] + beta_phi_sex[k]
     }
   }
 
+  for (i in 1:N) {
+    for (t in 1:(T - 1)) {
+    gamma[1, 1, i, t] <- phi[SEX[i], t]
+    gamma[1, 2, i, t] <- 1 - phi[SEX[i], t]
+    gamma[2, 1, i, t] <- 0
+    gamma[2, 2, i, t] <- 1
+    }
+  }
+
+      
   for (k in 1:K) {
     p[k] ~ dunif(0, 1)
   }
@@ -890,27 +905,30 @@ mcmc_p.sex_phi.timeCAT.sex <- nimbleMCMC(
 #| eval: true
 
 mcmc_p.sex_phi.timeCAT.sex$WAIC
+mcmc_p.sex_phi.timeCAT.sex$summary
 ```
 
 ## Summary WAIC
 
-|         |            |             |               |                |           |
-|:-------:|:----------:|:-----------:|:-------------:|:--------------:|:---------:|
-| Model   | $p ~ sex$  | $p \~ time$ | $\phi \~ sex$ | $\phi \~ time$ |  $WAIC$   |
-|    1    |    cat     |     cat     |      cat      |      cat       |    541    |
-|    2    |    cat     |     RE      |      cat      |      cat       |    552    |
-|    3    |    cat     |  constant   |      cat      |      cat       |    557    |
-|    4    |  constant  |  constant   |      cat      |      cat       |    537    |
-|    5    |    cat     |  constant   |      cat      |       RE       |    533    |
-|    6    |    cat     |  constant   |      cat      |   continuous   |  **529\***|
-|    7    |    cat     |  constant   |      cat      |    constant    |    531    |
-|    8    |    cat     |  constant   |   constant    |       RE       |    531    |
+|       |           |             |               |                |           |
+|:-----:|:---------:|:-----------:|:-------------:|:--------------:|:---------:|
+| Model | $p ~ sex$ | $p \~ time$ | $\phi \~ sex$ | $\phi \~ time$ |  $WAIC$   |
+|   1   |    cat    |     cat     |      cat      |      cat       |    541    |
+|   2   |    cat    |     RE      |      cat      |      cat       |    553    |
+|   3   |    cat    |  constant   |      cat      |      cat       |    557    |
+|   4   | constant  |  constant   |      cat      |      cat       |    537    |
+|   5   |    cat    |  constant   |      cat      |       RE       |    533    |
+|   6   |    cat    |  constant   |      cat      |   continuous   | **529\*** |
+|   7   |    cat    |  constant   |      cat      |    constant    |    535    |
+|   8   |    cat    |  constant   |   constant    |       RE       |    531    |
 
 cat = categorical ; RE = random effect
 
 **\***Best model
 
-We selected **model 6** for subsequent analyses.
+**Model 8** and **model 6** were considered equivalent because their $\Delta$WAIC is ≤ 2.
+
+However, **model 6** is more parsimonious (less parameters). Therefore, we selected **model 6** for subsequent analyses.
 
 ## Output of best model
 
@@ -954,7 +972,7 @@ oxyd <- log_oxy |>
   as.numeric()
 ```
 
-Pool all deciles except the last n :
+Pool all first deciles together and the last n together :
 
 ```{r}
 
@@ -1326,8 +1344,6 @@ mcmc_p.sex_phi.timeCAT.oxyCAT3D <- nimbleMCMC(
 
 mcmc_p.sex_phi.timeCAT.oxyCAT$WAIC
 ```
-
-
 
 ### $log(OXY)$ as a pooled categorical variable (except last two deciles)
 

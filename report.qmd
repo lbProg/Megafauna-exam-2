@@ -1042,12 +1042,14 @@ hmm.p.sex_phi.timeCAT.oxyCONT <- nimbleCode({
     beta_time[t] ~ dnorm(0, sd = 1.5)
   }
   
-  for (t in 1:(T-1)){
-    logit(phi[t]) <- alpha_phi0 + beta_oxy * OXY[t] + beta_time[t]
-    gamma[1,1,t] <- phi[t]      # Pr(alive t -> alive t+1)
-    gamma[1,2,t] <- 1 - phi[t]  # Pr(alive t -> dead t+1)
-    gamma[2,1,t] <- 0           # Pr(dead t -> alive t+1)
-    gamma[2,2,t] <- 1           # Pr(dead t -> dead t+1)
+  for (t in 1:(T-1)) {
+    for (i in 1:N) {
+      logit(phi[i,t]) <- alpha_phi0 + beta_oxy * OXY[i] + beta_time[t]
+      gamma[1,1,i,t] <- phi[i,t]       
+      gamma[1,2,i,t] <- 1 - phi[i,t]   
+      gamma[2,1,i,t] <- 0              
+      gamma[2,2,i,t] <- 1              
+    }
   }
   
   alpha_phi0 ~ dnorm(0, sd = 1.5)
@@ -1056,7 +1058,7 @@ hmm.p.sex_phi.timeCAT.oxyCONT <- nimbleCode({
   for(i in 1:N){
     z[i, first[i]] ~ dcat(delta[1:2])
     for(j in (first[i]+1):T){
-      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,j-1])
+      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,i,j-1])
       y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
     }
   }
@@ -1112,11 +1114,14 @@ mcmc_p.sex_phi.timeCAT.oxyCONT <- nimbleMCMC(
 #| eval: true
 
 mcmc_p.sex_phi.timeCAT.oxyCONT$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCONT$summary
 ```
 
 ### $log(OXY)$ as a categorical variable
 
 ```{r}
+G <- length(unique(oxyd))
+
 hmm.p.sex_phi.timeCAT.oxyCAT <- nimbleCode({
   delta[1] <- 1          
   delta[2] <- 0 
@@ -1216,6 +1221,8 @@ mcmc_p.sex_phi.timeCAT.oxyCAT <- nimbleMCMC(
 
 ```{r}
 mcmc_p.sex_phi.timeCAT.oxyCAT$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCAT$summary
+
 ```
 
 ### $log(OXY)$ as a pooled categorical variable (9 first deciles)
@@ -1226,7 +1233,7 @@ G <- length(unique(oxyd_D9))
 ```
 
 ```{r}
-constants <- list(
+my.constants <- list(
   N = N,
   T = T,
   SEX = SEX,
@@ -1244,7 +1251,7 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 ```{r}
 mcmc_p.sex_phi.timeCAT.oxyCATD9 <- nimbleMCMC(
   code = hmm.p.sex_phi.timeCAT.oxyCAT,
-  constants = constants,
+  constants = my.constants,
   data = my.data,
   inits = initial.values,
   monitors = params,
@@ -1259,6 +1266,7 @@ mcmc_p.sex_phi.timeCAT.oxyCATD9 <- nimbleMCMC(
 
 ```{r}
 mcmc_p.sex_phi.timeCAT.oxyCATD9$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCATD9$summary
 ```
 
 ### $log(OXY)$ as a pooled categorical variable (8 first deciles)

@@ -36,14 +36,6 @@ library(nimble)
 raw_data <- read.csv(here("Data/input.csv"))
 ```
 
-```{r}
-#| include: false
-#| eval: true
-
-load(here("Data/Models_croissant_seed1604_VF.RData"))
-load(here("Data/Model8.RData"))
-```
-
 For reproducibility, we set the global seed and the seeds for each of the chains in our models.
 
 ```{r}
@@ -109,22 +101,26 @@ n_chains <- 4
 n_thin <- 1
 ```
 
+## $NB$ : Categorical effects
+
+In all our models with *categorical effects*, we set the *first category to 0* (reference) to interpret each coefficient as the *difference (on the logit scale)* relative to this reference.
+
 # 1. Preliminary analyses
 
-Selecting a model where survival probabliity and detection probability depend on time and sex. We will compare WAIC values to select the best model.
+Selecting a model where survival probability and detection probability depend on time and sex. We will compare WAIC values to select the best model.
 
 From the most simple model to the most complex.
 
-## Model 1
+## Comparison of temporal structures for p
+
+### Model 1
 
 |      | $p$      | $\phi$   |
 |------|----------|----------|
 | Time | constant | constant |
 | Sex  | constant | constant |
 
-$p$ : Detectability could vary among years, depending on weather or the effort for example. Here, treating time as a categorical covariate rather than a continuous one allows a non-linear trend. It could also differ between sexes due to differences in their behavior.
-
-$\phi$ : Survival could vary according to fluctuating environmental conditions. Moreover, sex differences in physiology, behavior or reproductive investment can make them more or less likely to survive.
+Parsimonious null model ($p$ and $\phi$ constant). Used as a reference to assess the relevance of temporal and/or sex effects.
 
 Model code :
 
@@ -210,14 +206,14 @@ mcmc_p._phi.$WAIC
 mcmc_p._phi.$summary
 ```
 
-## Model 2
+### Model 2
 
 |      | $p$           | $\phi$   |
 |------|---------------|----------|
 | Time | random effect | constant |
 | Sex  | constant      | constant |
 
-Detection is expected to fluctuate randomly among years due to variable field conditions.
+Detection is expected to fluctuate randomly among years due to variable field conditions, protocols or different observers.
 
 Model code :
 
@@ -305,14 +301,14 @@ mcmc_p.timeRE_phi.$WAIC
 mcmc_p.timeRE_phi.$summary
 ```
 
-## Model 3
+### Model 3
 
 |      | $p$         | $\phi$   |
 |------|-------------|----------|
 | Time | categorical | constant |
 | Sex  | constant    | constant |
 
-Detection could be stable accross years because of standardized protocols, same observer effort among years and site-fidelity of seabirds.
+Detection is expected to fluctuate in a non-linear way due to variable field conditions, protocols or different observers.
 
 Model code :
 
@@ -398,16 +394,26 @@ mcmc_p.timeCAT_phi.$summary
 
 When examining the time-dependent parameter p, which was modeled as a categorical variable, we observed an apparent decline in detection probability over time (across the different categories). However, from a biological standpoint, we did not consider it particularly meaningful to model such a temporal decline.
 
-The best model for time-dependent p was **model 1**, so we used this model as the basis for selecting the best model for p that also included sex.
+### Summary WAIC
 
-## Model 4
+| Model | time          | WAIC |
+|-------|---------------|------|
+| 1     | constant      | 541  |
+| 2     | random effect | 553  |
+| 3     | categorical   | 557  |
+
+The best model for time-dependent p was **model 1** (time constant), so we used this model as the basis for selecting the best model for $p$ that also included sex.
+
+## Comparison of sex effect for p
+
+### Model 4
 
 |      | $p$         | $\phi$   |
 |------|-------------|----------|
 | Time | constant    | constant |
 | Sex  | categorical | constant |
 
-In colonial seabirds, males and females attend nests at overlapping times. Because both sexes are equally present, observers are not more likely to detect one sex over the other.
+Behavioral differences between sexes can affect detectability.
 
 Model code :
 
@@ -494,14 +500,25 @@ mcmc_p.sex_phi.$WAIC
 mcmc_p.sex_phi.$summary
 ```
 
+### Summary WAIC
+
+| Model | sex         | WAIC |
+|-------|-------------|------|
+| 1     | constant    | 541  |
+| 4     | categorical | 537  |
+
 Since the best model for $p$ is **model 4** ($p$ depends only on sex as a categorical covariate), it was retained for selecting the best model for $\phi$.
 
-## Model 5
+## Comparison of temporal structures for phi
+
+### Model 5
 
 |      | $p$         | $\phi$        |
 |------|-------------|---------------|
 | Time | constant    | random effect |
 | Sex  | categorical | constant      |
+
+In a long-lived species, survival may fluctuate from year to year due to unobserved environmental factor. A yearly random effect captures this stochastic variability
 
 Model code :
 
@@ -522,12 +539,12 @@ hmm.p.sex_phi.timeRE <- nimbleCode({
   }
   
   for (t in 1:(T-1)){
-    logit(phi[t]) <- muphi + eps_phi[t] # eps is the random effect (epsilon)
+    logit(phi[t]) <- muphi + eps_phi[t] 
     eps_phi[t] ~ dnorm(0, sd = sdeps_phi)
-    gamma[1,1,t] <- phi[t]      # Pr(alive t -> alive t+1)
-    gamma[1,2,t] <- 1 - phi[t]  # Pr(alive t -> dead t+1)
-    gamma[2,1,t] <- 0           # Pr(dead t -> alive t+1)
-    gamma[2,2,t] <- 1           # Pr(dead t -> dead t+1)
+    gamma[1,1,t] <- phi[t]      
+    gamma[1,2,t] <- 1 - phi[t]  
+    gamma[2,1,t] <- 0           
+    gamma[2,2,t] <- 1           
   }
   
   muphi ~ dnorm(0, sd = 1.5)
@@ -595,14 +612,14 @@ mcmc_p.sex_phi.timeRE$WAIC
 mcmc_p.sex_phi.timeRE$summary
 ```
 
-## Model 6
+### Model 6
 
 |      | $p$         | $\phi$      |
 |------|-------------|-------------|
 | Time | constant    | categorical |
 | Sex  | categorical | constant    |
 
-A continuous time effect allows survival to reflect gradual directional changes driven by long-term environmental or contaminant trends.
+In a long-lived species, survival may fluctuate from year to year due to unobserved environmental factor.
 
 Model code :
 
@@ -623,7 +640,7 @@ hmm.p.sex_phi.timeCAT <- nimbleCode({
   }
   
   for(t in 1:(T-1)){
-    phi[t] ~ dunif(0,1)   # un p par année
+    phi[t] ~ dunif(0,1)   
     gamma[1,1,t] <- phi[t]
     gamma[1,2,t] <- 1 - phi[t]
     gamma[2,1,t] <- 0
@@ -693,14 +710,14 @@ mcmc_p.sex_phi.timeCAT$WAIC
 mcmc_p.sex_phi.timeCAT$summary
 ```
 
-## Model 7
+### Model 7
 
 |      | $p$         | $\phi$     |
 |------|-------------|------------|
 | Time | constant    | continuous |
 | Sex  | categorical | constant   |
 
-Adult survival in long-lived species such as *Larus hyperboreus* can be buffered against short-term environmental fluctuations, so it can be considered as constant accoss years.
+Directional and cumulative pressures (such as chronic exposure to pollutants, habitat degradation, and climate change) can lead to a gradual yearly decline in survival.
 
 Model code :
 
@@ -792,7 +809,19 @@ mcmc_p.sex_phi.timeCONT$WAIC
 mcmc_p.sex_phi.timeCONT$summary
 ```
 
-## Model 8
+### Summary WAIC
+
+| Model | time          | WAIC |
+|-------|---------------|------|
+| 5     | random effect | 533  |
+| 6     | categorical   | 529  |
+| 7     | continuous    | 535  |
+
+The best model for time-dependent $\phi$ was **model 6** (time as a categorical covariate), so we used this model as the basis for selecting the best model for $\phi$ that also included sex.
+
+## Comparison of sex effect for p
+
+### Model 8
 
 |      | $p$         | $\phi$      |
 |------|-------------|-------------|
@@ -908,27 +937,25 @@ mcmc_p.sex_phi.timeCAT.sex$WAIC
 mcmc_p.sex_phi.timeCAT.sex$summary
 ```
 
-## Summary WAIC
+## Overall WAIC
 
-|       |           |             |               |                |           |
-|:-----:|:---------:|:-----------:|:-------------:|:--------------:|:---------:|
-| Model | $p ~ sex$ | $p \~ time$ | $\phi \~ sex$ | $\phi \~ time$ |  $WAIC$   |
-|   1   |    cat    |     cat     |      cat      |      cat       |    541    |
-|   2   |    cat    |     RE      |      cat      |      cat       |    553    |
-|   3   |    cat    |  constant   |      cat      |      cat       |    557    |
-|   4   | constant  |  constant   |      cat      |      cat       |    537    |
-|   5   |    cat    |  constant   |      cat      |       RE       |    533    |
-|   6   |    cat    |  constant   |      cat      |   continuous   | **529\*** |
-|   7   |    cat    |  constant   |      cat      |    constant    |    535    |
-|   8   |    cat    |  constant   |   constant    |       RE       |    531    |
+|       |             |             |               |                |           |
+|:-----:|:-----------:|:-----------:|:-------------:|:--------------:|:---------:|
+| Model |  $p ~ sex$  | $p \~ time$ | $\phi \~ sex$ | $\phi \~ time$ |  $WAIC$   |
+|   1   |  constant   |  constant   |   constant    |    constant    |    541    |
+|   2   |  constant   |     RE      |   constant    |    constant    |    553    |
+|   3   |  constant   | categorical |   constant    |    constant    |    557    |
+|   4   | categorical |  constant   |   constant    |    constant    |    537    |
+|   5   |     cat     |  constant   |   constant    |       RE       |    533    |
+|   6   |     cat     |  constant   |   constant    |  categorical   | **529\*** |
+|   7   |     cat     |  constant   |   constant    |    constant    |    535    |
+|   8   |     cat     |  constant   |  categorical  |  categorical   |    532    |
 
 cat = categorical ; RE = random effect
 
 **\***Best model
 
-**Model 8** and **model 6** were considered equivalent because their $\Delta$WAIC is ≤ 2.
-
-However, **model 6** is more parsimonious (less parameters). Therefore, we selected **model 6** for subsequent analyses.
+Therefore, we selected **model 6** for subsequent analyses.
 
 ## Output of best model
 
@@ -983,42 +1010,28 @@ pool_n <- function(data, sex, n_female, n_male) {
 
   groups <- data
 
-  groups[sex == 2 &  (data %in% topD_f)] <- max(levels)
-  groups[sex == 2 & !(data %in% topD_f)] <- 1
-  groups[sex == 1 &  (data %in% topD_m)] <- max(levels)
-  groups[sex == 1 & !(data %in% topD_m)] <- 1
+  groups[sex == 2 &  (data %in% topD_f)] <- max(levels) # n last deciles grouped together for females
+  groups[sex == 2 & !(data %in% topD_f)] <- 1 # other deciles grouped together for females
+  groups[sex == 1 &  (data %in% topD_m)] <- max(levels) # n last deciles grouped together for males
+  groups[sex == 1 & !(data %in% topD_m)] <- 1 # other deciles grouped together for males
 
-  match(groups, sort(unique(groups)))
+  match(groups, sort(unique(groups))) # create 2 groups : low and high oxy levels
 }
 
 ```
 
 ```{r}
-data.frame(x = oxyd, SEX = raw_data$sex, y = pool_n(oxyd, raw_data$sex, n_female = 1, n_male = 2))
+data.frame(x = oxyd, SEX = raw_data$sex, y = pool_n(oxyd, raw_data$sex, n_female = 2, n_male = 1))
 ```
 
-## Model selection strategy
+## Model 1 : $log(OXY)$ as a continuous variable
 
-We will test the folowing models to compare them :
-
-| Model | $log(OXY)$  | male threshold | female threshold |
-|-------|-------------|----------------|------------------|
-| 1     | continuous  | na             | na               |
-| 2     | categorical | 0              | 0                |
-| 3     | categorical | 2              | 2                |
-| 5     | categorical | 3              | 3                |
-| 6     | categorical | 2              | 3                |
-
-## Running the models : phi depends on OXY
-
-### $log(OXY)$ as a continuous variable
+An increasing pollutant dose is assumed to lead to a progressive decrease in survival.
 
 Scale $log(OXY)$
 
 ```{r}
 log_oxy_sc <- as.vector(scale(log_oxy))
-SEX <- as.integer(raw_data$sex)
-G <- length(unique(oxyd))
 ```
 
 ```{r}
@@ -1117,7 +1130,9 @@ mcmc_p.sex_phi.timeCAT.oxyCONT$WAIC
 mcmc_p.sex_phi.timeCAT.oxyCONT$summary
 ```
 
-### $log(OXY)$ as a categorical variable
+## Model 2 : $log(OXY)$ as a categorical variable
+
+A threshold effect may exist, below which the pollutant has no impact on survival, as well as a saturation effect at high doses, beyond which additional accumulation no longer affects survival. Such patterns could be highlighted by using classes.
 
 ```{r}
 G <- length(unique(oxyd))
@@ -1155,10 +1170,10 @@ hmm.p.sex_phi.timeCAT.oxyCAT <- nimbleCode({
   
   for(i in 1:N){
     for(t in 1:(T-1)){
-      gamma[1,1,i,t] <- phi[oxyd[i],t]      # Pr(alive t -> alive t+1)
-      gamma[1,2,i,t] <- 1 - phi[oxyd[i],t]  # Pr(alive t -> dead t+1)
-      gamma[2,1,i,t] <- 0           # Pr(dead t -> alive t+1)
-      gamma[2,2,i,t] <- 1           # Pr(dead t -> dead t+1)
+      gamma[1,1,i,t] <- phi[oxyd[i],t]      
+      gamma[1,2,i,t] <- 1 - phi[oxyd[i],t]  
+      gamma[2,1,i,t] <- 0           
+      gamma[2,2,i,t] <- 1           
     }
   }
 
@@ -1224,9 +1239,10 @@ mcmc_p.sex_phi.timeCAT.oxyCAT$WAIC
 mcmc_p.sex_phi.timeCAT.oxyCAT$summary
 
 ```
-We can observe that survival tends to decrease from the 9th or 10th decile. Therefore, it might make sense to group the first 9 or 8 deciles together and keep the last one separate. 
 
-### $log(OXY)$ as a pooled categorical variable (9 first deciles)
+We can observe that survival tends to decrease from the 9th or 10th decile. Therefore, it might make sense to group the first 9 or 8 deciles together and keep the last one separate.
+
+## Model 3 : $log(OXY)$ as a pooled categorical variable (9 first deciles)
 
 ```{r}
 oxyd_D9 <- pool_n(oxyd, raw_data$sex, 1, 1)
@@ -1270,7 +1286,7 @@ mcmc_p.sex_phi.timeCAT.oxyCATD9$WAIC
 mcmc_p.sex_phi.timeCAT.oxyCATD9$summary
 ```
 
-### $log(OXY)$ as a pooled categorical variable (8 first deciles)
+## Model 4 : $log(OXY)$ as a pooled categorical variable (8 first deciles)
 
 ```{r}
 oxyd_D8 <- pool_n(oxyd, raw_data$sex, 2, 2)
@@ -1313,7 +1329,8 @@ mcmc_p.sex_phi.timeCAT.oxyCATD8 <- nimbleMCMC(
 mcmc_p.sex_phi.timeCAT.oxyCATD8$WAIC
 mcmc_p.sex_phi.timeCAT.oxyCATD8$summary
 ```
-### $log(OXY)$ as a categorical variable in interaction with sex
+
+## Model 5 $log(OXY)$ as a categorical variable in interaction with sex
 
 We decided to test this model to determine whether the optimal oxy threshold differs between sexes.
 
@@ -1370,10 +1387,10 @@ hmm.p.sex_phi.timeCAT.oxyCAT_intsex <- nimbleCode({
   
   for(i in 1:N){
     for(t in 1:(T-1)){
-      gamma[1,1,i,t] <- phi[oxyd[i], SEX[i], t]      # Pr(alive t -> alive t+1)
-      gamma[1,2,i,t] <- 1 - phi[oxyd[i], SEX[i], t]  # Pr(alive t -> dead t+1)
-      gamma[2,1,i,t] <- 0           # Pr(dead t -> alive t+1)
-      gamma[2,2,i,t] <- 1           # Pr(dead t -> dead t+1)
+      gamma[1,1,i,t] <- phi[oxyd[i], SEX[i], t]      
+      gamma[1,2,i,t] <- 1 - phi[oxyd[i], SEX[i], t]  
+      gamma[2,1,i,t] <- 0           
+      gamma[2,2,i,t] <- 1           
     }
   }
   
@@ -1450,7 +1467,7 @@ mcmc_p.sex_phi.timeCAT.oxyCAT_intsex$summary
 
 For sex 1, the first nine deciles have similar survival, while survival decreases for the tenth decile. For sex 2, the first eight deciles have similar survival, whereas survival decreases for the last two deciles. Sex 1 is supposed to correspond to males and sex 2 to females. However, in the article, it’s the opposite: the first nine deciles correspond to females and the first eight deciles to males. Nevertheless, we chose to remain consistent with our own data in order to maintain a coherent approach when selecting the best model. Therefore, we subsequently tested grouping the first nine deciles for males and the first eight deciles for females.
 
-### $log(OXY)$ as a categorical variable in interaction with sex : 9 first deciles grouped for males and 8 first deciles grouped for females. 
+## Model 6 : $log(OXY)$ as a categorical variable in interaction with sex : 9 first deciles grouped for males and 8 first deciles grouped for females.
 
 This model allows us to account for different effects of the "high" levels of oxy on survival according to sex.
 
@@ -1458,7 +1475,6 @@ This model allows us to account for different effects of the "high" levels of ox
 oxyd_D8F_D9M <- pool_n(oxyd, raw_data$sex, n_female = 2, n_male = 1)
 G <- length(unique(oxyd_D8F_D9M))
 ```
-
 
 ```{r}
 my.constants <- list(N = N,
@@ -1499,16 +1515,14 @@ mcmc_p.sex_phi.timeCAT.oxyCAT_D8FD9M_intsex$WAIC
 mcmc_p.sex_phi.timeCAT.oxyCAT_D8FD9M_intsex$summary
 ```
 
+## Model 7 : $log(OXY)$ as a categorical variable : 9 first deciles grouped for males and 8 first deciles grouped for females.
 
-### $log(OXY)$ as a categorical variable : 9 first deciles grouped for males and 8 first deciles grouped for females. 
-
-In this model, there is no interaction with sex. This means that the high levels of oxy, even if they are not the same for females and males, act the same on survival.
+In this model, there is no interaction with sex. This implies that, although high oxy levels differ between females and males, their effect on survival is the same for both sexes.
 
 ```{r}
 oxyd_D8F_D9M <- pool_n(oxyd, raw_data$sex, n_female = 2, n_male = 1)
 G <- length(unique(oxyd_D8F_D9M))
 ```
-
 
 ```{r}
 
@@ -1539,19 +1553,17 @@ hmm.p.sex_phi.timeCAT.oxyCAT_D8FD9M_additive <- nimbleCode({
   
   for (t in 1:(T-1)) {
     for (g in 1:G) {
-      for (k in 1:K) {
-        logit(phi[g,k,t]) <- alpha_phi0 + beta_oxy[g] +
+        logit(phi[g,t]) <- alpha_phi0 + beta_oxy[g] +
           beta_time[t]
       }
     }
-  }
   
   for(i in 1:N){
     for(t in 1:(T-1)){
-      gamma[1,1,i,t] <- phi[oxyd[i], t]      # Pr(alive t -> alive t+1)
-      gamma[1,2,i,t] <- 1 - phi[oxyd[i], t]  # Pr(alive t -> dead t+1)
-      gamma[2,1,i,t] <- 0           # Pr(dead t -> alive t+1)
-      gamma[2,2,i,t] <- 1           # Pr(dead t -> dead t+1)
+      gamma[1,1,i,t] <- phi[oxyd[i], t]      
+      gamma[1,2,i,t] <- 1 - phi[oxyd[i], t]  
+      gamma[2,1,i,t] <- 0           
+      gamma[2,2,i,t] <- 1           
     }
   }
   
@@ -1613,6 +1625,135 @@ mcmc_p.sex_phi.timeCAT.oxyCAT_D8FD9M_additive <- nimbleMCMC(
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeCAT.oxyCAT_intsex$WAIC
-mcmc_p.sex_phi.timeCAT.oxyCAT_intsex$summary
+mcmc_p.sex_phi.timeCAT.oxyCAT_D8FD9M_additive$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCAT_D8FD9M_additive$summary
 ```
+
+## Model 8 : $log(OXY)$ as a categorical variable : 8 first deciles grouped for males and 9 first deciles grouped for females.
+
+We still wanted to try the best model of the article.
+
+```{r}
+oxyd_D9F_D8M <- pool_n(oxyd, raw_data$sex, n_female = 2, n_male = 1)
+G <- length(unique(oxyd_D9F_D8M))
+```
+
+```{r}
+
+hmm.p.sex_phi.timeCAT.oxyCAT_D9FD8M_additive <- nimbleCode({
+  delta[1] <- 1          
+  delta[2] <- 0 
+  
+  for(k in 1:K){
+    p[k] ~ dunif(0,1)
+  }
+  
+  for(i in 1:N){
+    omega[1,1,i] <- 1 - p[SEX[i]]
+    omega[1,2,i] <- p[SEX[i]]
+    omega[2,1,i] <- 1
+    omega[2,2,i] <- 0
+  }
+  
+  beta_time[1] <- 0
+  for(t in 2:(T-1)){
+    beta_time[t] ~ dnorm(0, sd = 1.5)
+  }
+  
+  beta_oxy[1] <- 0
+  for(g in 2:G){
+    beta_oxy[g] ~ dnorm(0, sd = 1.5)
+  }
+  
+  for (t in 1:(T-1)) {
+    for (g in 1:G) {
+        logit(phi[g,t]) <- alpha_phi0 + beta_oxy[g] +
+          beta_time[t]
+      }
+    }
+  
+  for(i in 1:N){
+    for(t in 1:(T-1)){
+      gamma[1,1,i,t] <- phi[oxyd[i], t]      
+      gamma[1,2,i,t] <- 1 - phi[oxyd[i], t]  
+      gamma[2,1,i,t] <- 0           
+      gamma[2,2,i,t] <- 1           
+    }
+  }
+  
+  
+  alpha_phi0 ~ dnorm(0, sd = 1.5)
+  
+  for(i in 1:N){
+    z[i, first[i]] ~ dcat(delta[1:2])
+    for(j in (first[i]+1):T){
+      z[i,j] ~ dcat(gamma[z[i,j-1], 1:2,i,j-1])
+      y[i,j] ~ dcat(omega[z[i,j], 1:2,i])
+    }
+  }
+})
+```
+
+```{r}
+my.constants <- list(N = N,
+                     T = T,
+                     first = first,
+                     SEX = SEX,
+                     K = K,
+                     oxyd = oxyd_D9F_D8M,
+                     G = G)
+```
+
+```{r}
+makeinits <- function() {
+  list(
+    p = runif(K,0,1),
+    alpha_phi0 = rnorm(1,0,1),
+    beta_oxy = c(0, rnorm(G-1,0,1)),
+    beta_time = c(0, rnorm(T-2,0,1.5)),
+    z = t(apply(y, 1, zinits))
+  )
+}
+
+initial.values <- replicate(4, makeinits(), simplify = FALSE)
+```
+
+```{r}
+params <- c("p", "phi","alpha_phi0", "beta_oxy", "beta_time")
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCAT_D9FD8M_additive <- nimbleMCMC(
+  code = hmm.p.sex_phi.timeCAT.oxyCAT_D9FD8M_additive,
+  constants = my.constants,
+  data = my.data,
+  inits = initial.values,
+  monitors = params,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  setSeed = chain_seeds,
+  summary = TRUE,
+  WAIC = TRUE
+)
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCAT_D9FD8M_additive$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCAT_D9FD8M_additive$summary
+```
+
+## Summary WAIC
+
+| Model | oxy | WAIC |
+|------------------------|------------------------|------------------------|
+| 1 | continuous | **531** |
+| 2 | categorical | **532** |
+| 3 | categorical (9 first deciles pulled) | **530** |
+| 4 | categorical (8 first deciles pulled) | **531** |
+| 5 | categorical x sex | 537 |
+| 6 | categorical (9 first deciles pulled for males and 8 first deciles pulled for females) x sex | **531** |
+| 7 | categorical (9 first deciles pulled for males and 8 first deciles pulled for females) | **530** |
+| 8 | categorical (8 first deciles pulled for males and 9 first deciles pulled for females) | **530** |
+
+\*Best models : 2 models were considered equivalent if their $\Delta$WAIC was ≤ 2.

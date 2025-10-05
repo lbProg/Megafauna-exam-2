@@ -1224,6 +1224,7 @@ mcmc_p.sex_phi.timeCAT.oxyCAT$WAIC
 mcmc_p.sex_phi.timeCAT.oxyCAT$summary
 
 ```
+We can observe that survival tends to decrease from the 9th or 10th decile. Therefore, it might make sense to group the first 9 or 8 deciles together and keep the last one separate. 
 
 ### $log(OXY)$ as a pooled categorical variable (9 first deciles)
 
@@ -1272,8 +1273,8 @@ mcmc_p.sex_phi.timeCAT.oxyCATD9$summary
 ### $log(OXY)$ as a pooled categorical variable (8 first deciles)
 
 ```{r}
-oxyd_D9 <- pool_n(oxyd, raw_data$sex, 1, 1)
-G <- length(unique(oxyd_D9))
+oxyd_D8 <- pool_n(oxyd, raw_data$sex, 2, 2)
+G <- length(unique(oxyd_D8))
 ```
 
 ```{r}
@@ -1284,7 +1285,7 @@ constants <- list(
   K = K,
   G = G,
   first = first,
-  oxyd = oxyd_D9
+  oxyd = oxyd_D8
 )
 ```
 
@@ -1293,91 +1294,7 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeCAT.oxyCATD9 <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeCAT.oxyCAT,
-  constants = constants,
-  data = my.data,
-  inits = initial.values,
-  monitors = params,
-  niter = n_iter,
-  nburnin = n_burnin,
-  nchains = n_chains,
-  setSeed = chain_seeds,
-  summary = TRUE,
-  WAIC = TRUE
-)
-```
-
-### $log(OXY)$ as a pooled categorical variable (except last three deciles)
-
-```{r}
-oxyd_3D <- pool_n(oxyd, raw_data$sex, 3, 3)
-G <- length(unique(oxyd_3D))
-```
-
-```{r}
-constants <- list(
-  N = N,
-  T = T,
-  sex = SEX,
-  K = K,
-  G = G,
-  first = first,
-  oxyd = oxyd_3D
-)
-```
-
-```{r}
-initial.values <- replicate(4, makeinits(), simplify = FALSE)
-```
-
-```{r}
-mcmc_p.sex_phi.timeCAT.oxyCAT3D <- nimbleMCMC(
-  code = model_oxy_cat,
-  constants = constants,
-  data = my.data, ####################################################
-  inits = initial.values,
-  monitors = params,
-  niter = n_iter,
-  nburnin = n_burnin,
-  nchains = n_chains,
-  setSeed = chain_seeds,
-  summary = TRUE,
-  WAIC = TRUE
-)
-```
-
-```{r}
-#| eval: true
-
-mcmc_p.sex_phi.timeCAT.oxyCAT$WAIC
-```
-
-### $log(OXY)$ as a pooled categorical variable (except last two deciles)
-
-```{r}
-oxyd_2D <- pool_n(oxyd, raw_data$sex, 2, 2)
-G <- length(unique(oxyd_2D))
-```
-
-```{r}
-constants <- list(
-  N = N,
-  T = T,
-  SEX = SEX,
-  K = K,
-  G = G,
-  first = first,
-  oxyd = oxyd_2D
-)
-```
-
-```{r}
-initial.values <- replicate(4, makeinits(), simplify = FALSE)
-```
-
-```{r}
-mcmc_p.sex_phi.timeCAT.oxyCAT2D <- nimbleMCMC(
+mcmc_p.sex_phi.timeCAT.oxyCATD8 <- nimbleMCMC(
   code = hmm.p.sex_phi.timeCAT.oxyCAT,
   constants = constants,
   data = my.data,
@@ -1393,65 +1310,17 @@ mcmc_p.sex_phi.timeCAT.oxyCAT2D <- nimbleMCMC(
 ```
 
 ```{r}
-#| eval: true
-
-mcmc_p.sex_phi.timeCAT.oxyCAT2D$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCATD8$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCATD8$summary
 ```
+### $log(OXY)$ as a categorical variable in interaction with sex
 
-### $log(OXY)$ as a pooled categorical variable (except last three deciles)
+We decided to test this model to determine whether the optimal oxy threshold differs between sexes.
 
 ```{r}
-oxyd_3D <- pool_n(oxyd, raw_data$sex, 3, 3)
-G <- length(unique(oxyd_3D))
-```
+G <- length(unique(oxyd))
 
-```{r}
-constants <- list(
-  N = N,
-  T = T,
-  SEX = SEX,
-  K = K,
-  G = G,
-  first = first,
-  oxyd = oxyd_3D
-)
-```
-
-```{r}
-initial.values <- replicate(4, makeinits(), simplify = FALSE)
-```
-
-```{r}
-mcmc_p.sex_phi.timeCAT.oxyCAT3D <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeCAT.oxyCAT,
-  constants = constants,
-  data = my.data, ####################################################
-  inits = initial.values,
-  monitors = params,
-  niter = n_iter,
-  nburnin = n_burnin,
-  nchains = n_chains,
-  setSeed = chain_seeds,
-  summary = TRUE,
-  WAIC = TRUE
-)
-```
-
-```{r}
-#| eval: true
-
-mcmc_p.sex_phi.timeCAT.oxyCAT3D$WAIC
-```
-
-### $log(OXY)$ as a pooled categorical variable (except last two or three deciles depending on sex)
-
-```{r}
-oxyd_mf <- pool_n(oxyd, raw_data$sex, 2, 3)
-G <- length(unique(oxyd_mf))
-```
-
-```{r}
-hmm.p.sex_phi.timeRE.oxyCAT_2DF3DM <- nimbleCode({
+hmm.p.sex_phi.timeCAT.oxyCAT_intsex <- nimbleCode({
   delta[1] <- 1          
   delta[2] <- 0 
   
@@ -1471,24 +1340,38 @@ hmm.p.sex_phi.timeRE.oxyCAT_2DF3DM <- nimbleCode({
     beta_time[t] ~ dnorm(0, sd = 1.5)
   }
   
-  beta_oxy[1,1] <- 0
+  beta_oxy[1] <- 0
   for(g in 2:G){
-    beta_oxy[1,g] ~ dnorm(0, sd = 1.5)
+    beta_oxy[g] ~ dnorm(0, sd = 1.5)
   }
   
-  for(g in 1:G){
-    beta_oxy[2,g] ~ dnorm(0, sd = 1.5)
+  beta_int[1,1] <- 0
+  for (g in 2:G) { beta_int[g,1] <- 0 }
+  for (k in 2:K) { beta_int[1,k] <- 0 }
+  for (g in 2:G) {
+    for (k in 2:K) {
+      beta_int[g,k] ~ dnorm(0, sd = 1.5)
+    }
+  }
+  
+  for (t in 1:(T-1)) {
+    for (g in 1:G) {
+      for (k in 1:K) {
+        logit(phi[g,k,t]) <- alpha_phi0 + beta_oxy[g] +
+          beta_time[t] + beta_int[g,k]
+      }
+    }
   }
   
   for(i in 1:N){
-    for (t in 1:(T-1)){
-      logit(phi[i,t]) <- alpha_phi0 + beta_oxy[SEX[i], oxyd[i]] + beta_time[t]
-      gamma[1,1,i,t] <- phi[i,t]      # Pr(alive t -> alive t+1)
-      gamma[1,2,i,t] <- 1 - phi[i,t]  # Pr(alive t -> dead t+1)
+    for(t in 1:(T-1)){
+      gamma[1,1,i,t] <- phi[oxyd[i], SEX[i], t]      # Pr(alive t -> alive t+1)
+      gamma[1,2,i,t] <- 1 - phi[oxyd[i], SEX[i], t]  # Pr(alive t -> dead t+1)
       gamma[2,1,i,t] <- 0           # Pr(dead t -> alive t+1)
       gamma[2,2,i,t] <- 1           # Pr(dead t -> dead t+1)
     }
   }
+  
   
   alpha_phi0 ~ dnorm(0, sd = 1.5)
   
@@ -1503,27 +1386,30 @@ hmm.p.sex_phi.timeRE.oxyCAT_2DF3DM <- nimbleCode({
 ```
 
 ```{r}
-constants <- list(
-  N = N,
-  T = T,
-  SEX = SEX,
-  K = K,
-  G = G,
-  first = first,
-  oxyd = oxyd_mf
-)
+my.constants <- list(N = N,
+                     T = T,
+                     first = first,
+                     SEX = SEX,
+                     K = K,
+                     oxyd = oxyd,
+                     G = G)
 ```
 
 ```{r}
 makeinits <- function() {
-  B <- matrix(rnorm(8, 0, 1), nrow = K, ncol = G)
-  B[1, 1] <- 0
-
+  beta_int <- matrix(0, nrow = G, ncol = K)
+  if (G > 1 && K > 1) {
+    beta_int[2:G, 2:K] <- matrix(
+      rnorm((G-1)*(K-1), 0, 1.0),
+      nrow = G-1, ncol = K-1
+    )
+  }
   list(
-    p = runif(K, 0, 1),
-    alpha_phi0 = rnorm(1, 0, 1),
-    beta_time = c(0, rnorm(T - 2, 0, 1.5)),
-    beta_oxy = B,
+    p = runif(K,0,1),
+    alpha_phi0 = rnorm(1,0,1),
+    beta_oxy = c(0, rnorm(G-1,0,1)),
+    beta_time = c(0, rnorm(T-2,0,1.5)),
+    beta_int = beta_int,
     z = t(apply(y, 1, zinits))
   )
 }
@@ -1532,9 +1418,13 @@ initial.values <- replicate(4, makeinits(), simplify = FALSE)
 ```
 
 ```{r}
-mcmc_p.sex_phi.timeCAT.oxyCAT_2DF3DM  <- nimbleMCMC(
-  code = hmm.p.sex_phi.timeCAT.oxyCAT_2DF3DM,
-  constants = constants,
+params <- c("p", "phi","alpha_phi0", "beta_oxy", "beta_time", "beta_int")
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCAT_intsex <- nimbleMCMC(
+  code = hmm.p.sex_phi.timeCAT.oxyCAT_intsex,
+  constants = my.constants,
   data = my.data,
   inits = initial.values,
   monitors = params,
@@ -1548,7 +1438,12 @@ mcmc_p.sex_phi.timeCAT.oxyCAT_2DF3DM  <- nimbleMCMC(
 ```
 
 ```{r}
-#| eval: true
-
-mcmc_p.sex_phi.timeCAT.oxyCAT_2DF3DM$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCAT_intsex$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCAT_intsex$summary
 ```
+
+For sex 1, the first nine deciles have similar survival, while survival decreases for the tenth decile. For sex 2, the first eight deciles have similar survival, whereas survival decreases for the last two deciles. Sex 1 is supposed to correspond to males and sex 2 to females. However, in the article, it’s the opposite: the first nine deciles correspond to females and the first eight deciles to males. Nevertheless, we chose to remain consistent with our own data in order to maintain a coherent approach when selecting the best model. Therefore, we subsequently tested grouping the first nine deciles for males and the first eight deciles for females.
+
+
+
+

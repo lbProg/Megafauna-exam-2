@@ -1444,6 +1444,54 @@ mcmc_p.sex_phi.timeCAT.oxyCAT_intsex$summary
 
 For sex 1, the first nine deciles have similar survival, while survival decreases for the tenth decile. For sex 2, the first eight deciles have similar survival, whereas survival decreases for the last two deciles. Sex 1 is supposed to correspond to males and sex 2 to females. However, in the article, it’s the opposite: the first nine deciles correspond to females and the first eight deciles to males. Nevertheless, we chose to remain consistent with our own data in order to maintain a coherent approach when selecting the best model. Therefore, we subsequently tested grouping the first nine deciles for males and the first eight deciles for females.
 
+### $log(OXY)$ as a categorical variable in interaction with sex : 9 first deciles grouped for males and 8 first deciles grouped for females
+
+We decided to test this model to determine whether the optimal oxy threshold differs between sexes.
+
+```{r}
+oxyd_D8F_D9M <- pool_n(oxyd, raw_data$sex, n_female = 2, n_male = 1)
+G <- length(unique(oxyd_D8F_D9M))
+```
+
+
+```{r}
+my.constants <- list(N = N,
+                     T = T,
+                     first = first,
+                     SEX = SEX,
+                     K = K,
+                     oxyd = oxyd_D8F_D9M,
+                     G = G)
+```
+
+```{r}
+initial.values <- replicate(4, makeinits(), simplify = FALSE)
+```
+
+```{r}
+params <- c("p", "phi","alpha_phi0", "beta_oxy", "beta_time", "beta_int")
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCAT_D8FD9M_intsex <- nimbleMCMC(
+  code = hmm.p.sex_phi.timeCAT.oxyCAT_intsex,
+  constants = constants,
+  data = my.data,
+  inits = initial.values,
+  monitors = params,
+  niter = n_iter,
+  nburnin = n_burnin,
+  nchains = n_chains,
+  setSeed = chain_seeds,
+  summary = TRUE,
+  WAIC = TRUE
+)
+```
+
+```{r}
+mcmc_p.sex_phi.timeCAT.oxyCAT_D8FD9M_intsex$WAIC
+mcmc_p.sex_phi.timeCAT.oxyCAT_D8FD9M_intsex$summary
+```
 
 
 

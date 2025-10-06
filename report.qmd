@@ -112,7 +112,7 @@ n_thin <- 1
 
 ## NB : Categorical effects
 
-In all our models with *categorical effects*, we set the *first category to 0* (reference) to interpret each coefficient as the *difference (on the logit scale)* relative to this reference.
+In all our models with **categorical effects**, we set the **first category to 0** (reference) to interpret each coefficient as the **difference (on the logit scale)** relative to this reference.
 
 # 1. Preliminary analyses
 
